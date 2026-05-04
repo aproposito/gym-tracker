@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Gym Tracker">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Gym Tracker</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow" id="todayLabel">Hoy</p>
+        <h1>Gym Tracker</h1>
+      </div>
+      <button class="icon-button" id="resetTodayButton" type="button" aria-label="Reiniciar entreno de hoy">↻</button>
+    </header>
+
+    <section class="summary-panel" aria-label="Resumen del entreno">
+      <div>
+        <span class="metric-value" id="progressValue">0%</span>
+        <span class="metric-label">completado</span>
+      </div>
+      <div>
+        <span class="metric-value" id="doneSetsValue">0/0</span>
+        <span class="metric-label">series</span>
+      </div>
+      <button class="primary-button" id="finishWorkoutButton" type="button">Guardar entreno</button>
+    </section>
+
+    <section class="routine-panel" aria-label="Seleccion de rutina">
+      <div>
+        <p class="panel-label">Rutina activa</p>
+        <strong id="activeRoutineName">Rutina A</strong>
+      </div>
+      <div class="routine-selector" id="routineSelector"></div>
+    </section>
+
+    <nav class="tabs" aria-label="Secciones">
+      <button class="tab-button active" type="button" data-tab="workout">Entreno</button>
+      <button class="tab-button" type="button" data-tab="edit">Editar</button>
+      <button class="tab-button" type="button" data-tab="history">Historial</button>
+      <button class="tab-button" type="button" data-tab="backup">Datos</button>
+    </nav>
+
+    <section class="timer-panel" aria-label="Cronometro de descanso">
+      <div>
+        <p class="panel-label">Descanso</p>
+        <div class="timer-display" id="timerDisplay">01:30</div>
+      </div>
+      <div class="timer-controls">
+        <label>
+          <span>Seg.</span>
+          <input id="restSecondsInput" type="number" min="10" step="5" value="90">
+        </label>
+        <button class="secondary-button" id="timerStartButton" type="button">Iniciar</button>
+        <button class="ghost-button" id="timerResetButton" type="button">Reset</button>
+      </div>
+    </section>
+
+    <section class="tab-panel active" id="workoutPanel">
+      <div class="section-heading">
+        <h2>Entreno de hoy</h2>
+        <p id="workoutSubtitle">Rutina A</p>
+      </div>
+      <div class="exercise-list" id="exerciseList"></div>
+    </section>
+
+    <section class="tab-panel" id="editPanel">
+      <div class="section-heading">
+        <h2>Editar rutina</h2>
+        <p>Ajusta esta plantilla a tus entrenos reales.</p>
+      </div>
+      <form class="edit-form" id="addExerciseForm">
+        <input id="exerciseNameInput" type="text" placeholder="Ejercicio" autocomplete="off" required>
+        <div class="form-row">
+          <input id="exerciseSetsInput" type="number" min="1" max="12" value="3" aria-label="Series">
+          <input id="exerciseRepsInput" type="text" value="10" aria-label="Repeticiones">
+          <input id="exerciseWeightInput" type="number" min="0" step="0.5" placeholder="kg" aria-label="Peso objetivo">
+        </div>
+        <button class="primary-button full" type="submit">Añadir ejercicio</button>
+      </form>
+      <div class="editable-list" id="editableExerciseList"></div>
+    </section>
+
+    <section class="tab-panel" id="historyPanel">
+      <div class="section-heading">
+        <h2>Historial</h2>
+        <p>Sesiones guardadas en este dispositivo.</p>
+      </div>
+      <div class="history-list" id="historyList"></div>
+    </section>
+
+    <section class="tab-panel" id="backupPanel">
+      <div class="section-heading">
+        <h2>Datos locales</h2>
+        <p>Copia o restaura tu progreso.</p>
+      </div>
+      <div class="backup-actions">
+        <button class="secondary-button full" id="exportButton" type="button">Exportar JSON</button>
+        <label class="file-button">
+          Importar JSON
+          <input id="importInput" type="file" accept="application/json">
+        </label>
+      </div>
+      <textarea id="exportOutput" readonly placeholder="Aqui aparecera la copia exportada."></textarea>
+    </section>
+  </main>
+
+  <template id="exerciseTemplate">
+    <article class="exercise-card">
+      <div class="exercise-header">
+        <div>
+          <h3></h3>
+          <p></p>
+        </div>
+        <span class="exercise-progress"></span>
+      </div>
+      <div class="set-list"></div>
+    </article>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
