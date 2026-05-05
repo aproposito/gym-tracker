@@ -28,6 +28,7 @@ const elements = {
   activeRoutineName: $("#activeRoutineName"),
   routineSelector: $("#routineSelector"),
   finishWorkoutButton: $("#finishWorkoutButton"),
+  abortWorkoutButton: $("#abortWorkoutButton"),
   resetTodayButton: $("#resetTodayButton"),
   exerciseList: $("#exerciseList"),
   workoutSubtitle: $("#workoutSubtitle"),
@@ -75,13 +76,8 @@ function bindEvents() {
   });
 
   elements.finishWorkoutButton.addEventListener("click", finishWorkout);
-  elements.resetTodayButton.addEventListener("click", () => {
-    if (confirm("Reiniciar las marcas y pesos del entreno de hoy?")) {
-      resetWorkoutProgress();
-      saveAndRender();
-      resetTimer();
-    }
-  });
+  elements.abortWorkoutButton.addEventListener("click", abortWorkout);
+  elements.resetTodayButton.addEventListener("click", abortWorkout);
 
   elements.addExerciseForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -133,13 +129,27 @@ function renderRoutineSelector() {
     button.textContent = routine.name.replace("Rutina ", "");
     button.setAttribute("aria-label", `Seleccionar ${routine.name}`);
     button.addEventListener("click", () => {
-      state.activeRoutineId = routine.id;
-      saveAndRender();
-      resetTimer();
-      switchTab("workout");
+      selectRoutine(routine.id);
     });
     elements.routineSelector.append(button);
   });
+}
+
+function selectRoutine(routineId) {
+  if (routineId === state.activeRoutineId) {
+    switchTab("workout");
+    return;
+  }
+
+  if (hasWorkoutProgress() && !confirm("Hay una sesión sin guardar. ¿Descartarla y cambiar de rutina?")) {
+    return;
+  }
+
+  resetWorkoutProgress();
+  state.activeRoutineId = routineId;
+  saveAndRender();
+  resetTimer();
+  switchTab("workout");
 }
 
 function renderSummary() {
@@ -355,12 +365,33 @@ function finishWorkout() {
   switchTab("history");
 }
 
+function abortWorkout() {
+  if (!hasWorkoutProgress()) {
+    resetTimer();
+    switchTab("workout");
+    return;
+  }
+
+  if (confirm("Abortar esta sesión sin guardarla en el historial?")) {
+    resetWorkoutProgress();
+    saveAndRender();
+    resetTimer();
+    switchTab("workout");
+  }
+}
+
 function resetWorkoutProgress() {
   getActiveExercises().forEach((exercise) => {
     exercise.sets.forEach((set) => {
       set.done = false;
       set.weight = "";
     });
+  });
+}
+
+function hasWorkoutProgress() {
+  return getActiveExercises().some((exercise) => {
+    return exercise.sets.some((set) => set.done || String(set.weight).trim() !== "");
   });
 }
 
