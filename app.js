@@ -366,18 +366,10 @@ function finishWorkout() {
 }
 
 function abortWorkout() {
-  if (!hasWorkoutProgress()) {
-    resetTimer();
-    switchTab("workout");
-    return;
-  }
-
-  if (confirm("Abortar esta sesión sin guardarla en el historial?")) {
-    resetWorkoutProgress();
-    saveAndRender();
-    resetTimer();
-    switchTab("workout");
-  }
+  resetWorkoutProgress();
+  saveAndRender();
+  resetTimer();
+  switchTab("workout");
 }
 
 function resetWorkoutProgress() {
