@@ -443,6 +443,34 @@ textarea:focus {
   font-size: 0.9rem;
 }
 
+.history-card li {
+  margin-bottom: 8px;
+}
+
+.history-card li:last-child {
+  margin-bottom: 0;
+}
+
+.history-card li strong {
+  color: var(--text);
+}
+
+.history-set-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.history-set-list span {
+  border-radius: 7px;
+  background: #f1f5f2;
+  color: var(--muted);
+  padding: 5px 7px;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
 .empty-state {
   padding: 20px;
   border: 1px dashed var(--line);

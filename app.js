@@ -147,6 +147,7 @@ function selectRoutine(routineId) {
 
   resetWorkoutProgress();
   state.activeRoutineId = routineId;
+  resetWorkoutProgress();
   saveAndRender();
   resetTimer();
   switchTab("workout");
@@ -285,7 +286,16 @@ function renderHistory() {
           <time>${escapeHtml(session.label)}</time>
         </header>
         <ul>
-          ${session.exercises.map((exercise) => `<li>${escapeHtml(exercise.name)}: ${exercise.sets.filter((set) => set.done).length}/${exercise.sets.length}</li>`).join("")}
+          ${session.exercises.map((exercise) => `
+            <li>
+              <strong>${escapeHtml(exercise.name)}: ${exercise.sets.filter((set) => set.done).length}/${exercise.sets.length}</strong>
+              <div class="history-set-list">
+                ${exercise.sets.map((set, setIndex) => `
+                  <span>${setIndex + 1}. ${formatHistorySet(set)}</span>
+                `).join("")}
+              </div>
+            </li>
+          `).join("")}
         </ul>
       `;
       elements.historyList.append(card);
@@ -325,7 +335,7 @@ function updateExercise(index, values) {
     const existing = exercise.sets[setIndex];
     return {
       reps: values.reps,
-      weight: existing?.weight || values.weight || "",
+      weight: existing?.weight ?? values.weight ?? "",
       done: existing?.done || false
     };
   });
@@ -373,17 +383,20 @@ function abortWorkout() {
 }
 
 function resetWorkoutProgress() {
+  const lastSession = getLastRoutineSession(getActiveRoutine().id);
+
   getActiveExercises().forEach((exercise) => {
-    exercise.sets.forEach((set) => {
+    const previousExercise = findMatchingHistoryExercise(lastSession, exercise);
+    exercise.sets.forEach((set, setIndex) => {
       set.done = false;
-      set.weight = "";
+      set.weight = getPreviousSetWeight(previousExercise, setIndex) ?? "";
     });
   });
 }
 
 function hasWorkoutProgress() {
   return getActiveExercises().some((exercise) => {
-    return exercise.sets.some((set) => set.done || String(set.weight).trim() !== "");
+    return exercise.sets.some((set) => set.done);
   });
 }
 
@@ -516,8 +529,15 @@ function normalizeState(value) {
   nextState.routines = nextState.routines.map((routine, index) => ({
     id: routine.id || `routine-${index + 1}`,
     name: routine.name || `Rutina ${index + 1}`,
-    exercises: Array.isArray(routine.exercises) ? routine.exercises : []
+    exercises: normalizeExercises(Array.isArray(routine.exercises) ? routine.exercises : [])
   }));
+
+  nextState.history = Array.isArray(nextState.history)
+    ? nextState.history.map((session) => ({
+        ...session,
+        exercises: normalizeExercises(Array.isArray(session.exercises) ? session.exercises : [])
+      }))
+    : [];
 
   if (nextState.routineTemplateVersion !== ROUTINE_TEMPLATE_VERSION) {
     const defaultRoutines = buildDefaultRoutines();
@@ -554,6 +574,61 @@ function replaceRoutine(stateToUpdate, sourceRoutines, routineId) {
   } else {
     stateToUpdate.routines.push(replacement);
   }
+}
+
+function normalizeExercises(exercises) {
+  return exercises.map((exercise, exerciseIndex) => ({
+    id: exercise.id || `exercise-${exerciseIndex + 1}`,
+    name: exercise.name || "Ejercicio sin nombre",
+    sets: Array.isArray(exercise.sets)
+      ? exercise.sets.map((set) => ({
+          reps: set.reps ?? "10",
+          weight: set.weight ?? "",
+          done: Boolean(set.done)
+        }))
+      : []
+  }));
+}
+
+function getLastRoutineSession(routineId) {
+  return state.history
+    .slice()
+    .reverse()
+    .find((session) => session.routineId === routineId);
+}
+
+function findMatchingHistoryExercise(session, exercise) {
+  if (!session) {
+    return null;
+  }
+
+  return session.exercises.find((historyExercise) => historyExercise.id === exercise.id)
+    || session.exercises.find((historyExercise) => normalizeName(historyExercise.name) === normalizeName(exercise.name))
+    || null;
+}
+
+function getPreviousSetWeight(previousExercise, setIndex) {
+  if (!previousExercise) {
+    return null;
+  }
+
+  const previousSet = previousExercise.sets[setIndex];
+  if (String(previousSet?.weight ?? "").trim() !== "") {
+    return previousSet.weight;
+  }
+
+  return null;
+}
+
+function formatHistorySet(set) {
+  const weight = String(set.weight ?? "").trim();
+  const weightLabel = weight ? `${escapeHtml(weight)} kg` : "sin peso";
+  const doneLabel = set.done ? "hecha" : "pendiente";
+  return `${weightLabel} x ${escapeHtml(set.reps)} (${doneLabel})`;
+}
+
+function normalizeName(value) {
+  return String(value ?? "").trim().toLocaleLowerCase("es-ES");
 }
 
 function emptyState(message) {
