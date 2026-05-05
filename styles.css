@@ -109,7 +109,7 @@ h3 {
 .exercise-card,
 .edit-form,
 .edit-row,
-.history-card,
+history-card,
 .backup-actions,
 textarea {
   border: 1px solid rgba(220, 226, 221, 0.9);
@@ -132,8 +132,14 @@ textarea {
   line-height: 1.1;
 }
 
-.summary-panel .primary-button {
+.summary-panel .session-actions {
   grid-column: 1 / -1;
+}
+
+.session-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
 .routine-panel {
