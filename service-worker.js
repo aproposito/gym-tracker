@@ -2,8 +2,8 @@ const CACHE_NAME = "gym-tracker-v6";
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css",
-  "./app.js",
+  "./styles.css?v=6",
+  "./app.js?v=6",
   "./manifest.webmanifest",
   "./icon.svg"
 ];
