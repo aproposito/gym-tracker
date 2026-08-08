@@ -7,6 +7,12 @@ const READINESS_ADJUSTMENTS = {
   soreness: { low: 0, medium: -5, high: -15 }
 };
 
+export function buildShortcutRunUrl(shortcutName, inputText) {
+  const name = String(shortcutName || "").trim() || "Calcular Readiness";
+  const text = String(inputText || "");
+  return `shortcuts://run-shortcut?name=${encodeURIComponent(name)}&input=text&text=${encodeURIComponent(text)}`;
+}
+
 export function createDefaultState() {
   return {
     schemaVersion: SCHEMA_VERSION,

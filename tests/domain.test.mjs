@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   SCHEMA_VERSION,
+  buildShortcutRunUrl,
   completeWorkoutSession,
   createDefaultState,
   createWorkoutSession,
@@ -15,6 +16,19 @@ import {
   todayKey,
   updateReadinessCheckin
 } from "../domain.js";
+
+test("codifica el nombre del Atajo con espacios y no con signos más", () => {
+  const url = buildShortcutRunUrl(
+    "Calcular Readiness",
+    "https://aproposito.github.io/gym-tracker/"
+  );
+
+  assert.equal(
+    url,
+    "shortcuts://run-shortcut?name=Calcular%20Readiness&input=text&text=https%3A%2F%2Faproposito.github.io%2Fgym-tracker%2F"
+  );
+  assert.equal(url.includes("+"), false);
+});
 
 function idFactory() {
   let index = 0;

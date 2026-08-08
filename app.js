@@ -1,6 +1,7 @@
 import {
   STORAGE_KEY,
   LEGACY_STORAGE_KEY,
+  buildShortcutRunUrl,
   cloneData,
   completeWorkoutSession,
   createId,
@@ -584,12 +585,8 @@ function processReadinessReturn() {
 function launchReadinessShortcut() {
   const shortcutName = state.settings.shortcutName.trim() || "Calcular Readiness";
   const callbackUrl = `${window.location.origin}${window.location.pathname}`;
-  const shortcutUrl = new URL("shortcuts://run-shortcut");
-  shortcutUrl.searchParams.set("name", shortcutName);
-  shortcutUrl.searchParams.set("input", "text");
-  shortcutUrl.searchParams.set("text", callbackUrl);
   showToast("Abriendo Atajos…");
-  window.location.href = shortcutUrl.toString();
+  window.location.href = buildShortcutRunUrl(shortcutName, callbackUrl);
 }
 
 function renderHistory() {

@@ -1,3 +1,4 @@
 .DS_Store
+/99_REVISAR_BORRAR/
 .playwright-cli/
 output/
