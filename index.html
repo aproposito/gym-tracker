@@ -3,132 +3,263 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#111827">
+  <meta name="theme-color" content="#f4f5f2">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Gym Tracker">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>Gym Tracker</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="apple-touch-icon" href="icon.svg">
-  <link rel="stylesheet" href="styles.css?v=6">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
-  <main class="app-shell">
-    <header class="topbar">
+  <div class="app-shell">
+    <header class="app-header" id="appHeader">
       <div>
         <p class="eyebrow" id="todayLabel">Hoy</p>
-        <h1>Gym Tracker</h1>
+        <h1 id="pageTitle">Gym Tracker</h1>
       </div>
-      <button class="icon-button" id="resetTodayButton" type="button" aria-label="Reiniciar entreno de hoy">↻</button>
+      <button class="icon-button" id="settingsButton" type="button" aria-label="Abrir ajustes" title="Ajustes">
+        <span aria-hidden="true">⚙</span>
+      </button>
     </header>
 
-    <section class="summary-panel" aria-label="Resumen del entreno">
-      <div>
-        <span class="metric-value" id="progressValue">0%</span>
-        <span class="metric-label">completado</span>
-      </div>
-      <div>
-        <span class="metric-value" id="doneSetsValue">0/0</span>
-        <span class="metric-label">series</span>
-      </div>
-      <div class="session-actions">
-        <button class="primary-button" id="finishWorkoutButton" type="button">Guardar entreno</button>
-        <button class="danger-button" id="abortWorkoutButton" type="button">Desechar entreno</button>
-      </div>
-    </section>
+    <main>
+      <section class="view active" id="homeView" data-view="home">
+        <section class="readiness-panel readiness-unknown" id="readinessPanel" aria-labelledby="readinessTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Readiness</p>
+              <h2 id="readinessTitle">Sin calcular</h2>
+            </div>
+            <div class="readiness-score" id="readinessScore" aria-label="Readiness sin calcular">--</div>
+          </div>
+          <p class="readiness-recommendation" id="readinessRecommendation">Consulta Apple Salud antes de entrenar.</p>
+          <ul class="factor-list" id="readinessFactors"></ul>
 
-    <section class="routine-panel" aria-label="Seleccion de rutina">
-      <div>
-        <p class="panel-label">Rutina activa</p>
-        <strong id="activeRoutineName">Rutina A</strong>
-      </div>
-      <div class="routine-selector" id="routineSelector"></div>
-    </section>
+          <div class="checkin-grid">
+            <fieldset class="choice-fieldset">
+              <legend>Energía</legend>
+              <div class="segmented-control" id="energyControl">
+                <button type="button" data-readiness-field="energy" data-value="low">Baja</button>
+                <button type="button" data-readiness-field="energy" data-value="normal">Normal</button>
+                <button type="button" data-readiness-field="energy" data-value="high">Alta</button>
+              </div>
+            </fieldset>
+            <fieldset class="choice-fieldset">
+              <legend>Agujetas</legend>
+              <div class="segmented-control" id="sorenessControl">
+                <button type="button" data-readiness-field="soreness" data-value="low">Bajas</button>
+                <button type="button" data-readiness-field="soreness" data-value="medium">Medias</button>
+                <button type="button" data-readiness-field="soreness" data-value="high">Altas</button>
+              </div>
+            </fieldset>
+          </div>
 
-    <nav class="tabs" aria-label="Secciones">
-      <button class="tab-button active" type="button" data-tab="workout">Entreno</button>
-      <button class="tab-button" type="button" data-tab="edit">Editar</button>
-      <button class="tab-button" type="button" data-tab="history">Historial</button>
-      <button class="tab-button" type="button" data-tab="backup">Datos</button>
-    </nav>
+          <button class="secondary-button full" id="readinessButton" type="button">Actualizar con Apple Salud</button>
+        </section>
 
-    <section class="timer-panel" aria-label="Cronometro de descanso">
-      <div>
-        <p class="panel-label">Descanso</p>
-        <div class="timer-display" id="timerDisplay">01:30</div>
-      </div>
-      <div class="timer-controls">
-        <label>
-          <span>Seg.</span>
-          <input id="restSecondsInput" type="number" min="10" step="5" value="90">
-        </label>
-        <button class="secondary-button" id="timerStartButton" type="button">Iniciar</button>
-        <button class="ghost-button" id="timerResetButton" type="button">Reset</button>
-      </div>
-    </section>
+        <section class="today-panel" aria-labelledby="nextWorkoutTitle">
+          <div class="panel-heading align-end">
+            <div>
+              <p class="eyebrow" id="routineSuggestionLabel">Siguiente sugerida</p>
+              <h2 id="nextWorkoutTitle">Rutina A</h2>
+            </div>
+            <span class="workout-count" id="routineSummary">0 ejercicios</span>
+          </div>
+          <div class="routine-selector" id="homeRoutineSelector" aria-label="Elegir rutina"></div>
+          <button class="primary-button full start-button" id="startWorkoutButton" type="button">Empezar entrenamiento</button>
+        </section>
 
-    <section class="tab-panel active" id="workoutPanel">
-      <div class="section-heading">
-        <h2>Entreno de hoy</h2>
-        <p id="workoutSubtitle">Rutina A</p>
-      </div>
-      <div class="exercise-list" id="exerciseList"></div>
-    </section>
+        <section class="plain-section" aria-labelledby="lastWorkoutTitle">
+          <div class="section-heading">
+            <h2 id="lastWorkoutTitle">Último entrenamiento</h2>
+          </div>
+          <div id="lastWorkout"></div>
+        </section>
 
-    <section class="tab-panel" id="editPanel">
-      <div class="section-heading">
-        <h2>Editar rutina</h2>
-        <p>Ajusta esta plantilla a tus entrenos reales.</p>
-      </div>
-      <form class="edit-form" id="addExerciseForm">
-        <input id="exerciseNameInput" type="text" placeholder="Ejercicio" autocomplete="off" required>
-        <div class="form-row">
-          <input id="exerciseSetsInput" type="number" min="1" max="12" value="3" aria-label="Series">
-          <input id="exerciseRepsInput" type="text" value="10" aria-label="Repeticiones">
-          <input id="exerciseWeightInput" type="number" min="0" step="0.5" placeholder="kg" aria-label="Peso objetivo">
+        <section class="plain-section" aria-labelledby="recordsTitle">
+          <div class="section-heading">
+            <h2 id="recordsTitle">Tus marcas</h2>
+            <button class="text-button" type="button" data-go-view="history">Ver progreso</button>
+          </div>
+          <div class="record-list" id="homeRecords"></div>
+        </section>
+      </section>
+
+      <section class="view session-view" id="sessionView" data-view="session">
+        <header class="session-header">
+          <div>
+            <p class="eyebrow" id="sessionStartedLabel">En curso</p>
+            <h1 id="sessionRoutineName">Rutina</h1>
+          </div>
+          <div class="session-time" id="sessionElapsed">00:00</div>
+        </header>
+
+        <section class="session-progress" aria-label="Progreso de la sesión">
+          <div class="progress-copy">
+            <strong id="sessionProgressText">0 de 0 series</strong>
+            <span id="sessionProgressPercent">0%</span>
+          </div>
+          <div class="progress-track" aria-hidden="true"><span id="sessionProgressBar"></span></div>
+        </section>
+
+        <div class="exercise-list" id="sessionExerciseList"></div>
+
+        <div class="session-actions">
+          <button class="primary-button" id="finishWorkoutButton" type="button">Guardar entrenamiento</button>
+          <button class="danger-button" id="discardWorkoutButton" type="button">Desechar entrenamiento</button>
         </div>
-        <button class="primary-button full" type="submit">Añadir ejercicio</button>
-      </form>
-      <div class="editable-list" id="editableExerciseList"></div>
-    </section>
+      </section>
 
-    <section class="tab-panel" id="historyPanel">
-      <div class="section-heading">
-        <h2>Historial</h2>
-        <p>Sesiones guardadas en este dispositivo.</p>
-      </div>
-      <div class="history-list" id="historyList"></div>
-    </section>
+      <section class="view" id="historyView" data-view="history">
+        <section class="progress-panel" aria-labelledby="progressTitle">
+          <div class="section-heading progress-heading">
+            <h2 id="progressTitle">Progreso</h2>
+            <select id="progressExerciseSelect" aria-label="Ejercicio para mostrar"></select>
+          </div>
+          <div class="progress-stats">
+            <div><span>Último</span><strong id="progressLatest">--</strong></div>
+            <div><span>PR</span><strong id="progressRecord">--</strong></div>
+          </div>
+          <canvas id="progressChart" height="168" aria-label="Evolución del ejercicio"></canvas>
+        </section>
 
-    <section class="tab-panel" id="backupPanel">
-      <div class="section-heading">
-        <h2>Datos locales</h2>
-        <p>Copia o restaura tu progreso.</p>
-      </div>
-      <div class="backup-actions">
-        <button class="secondary-button full" id="exportButton" type="button">Exportar JSON</button>
-        <label class="file-button">
-          Importar JSON
-          <input id="importInput" type="file" accept="application/json">
-        </label>
-      </div>
-      <textarea id="exportOutput" readonly placeholder="Aqui aparecera la copia exportada."></textarea>
-    </section>
-  </main>
+        <section class="plain-section history-section" aria-labelledby="historyTitle">
+          <div class="section-heading">
+            <h2 id="historyTitle">Sesiones</h2>
+            <span class="section-count" id="historyCount">0</span>
+          </div>
+          <div class="history-list" id="historyList"></div>
+        </section>
+      </section>
 
-  <template id="exerciseTemplate">
-    <article class="exercise-card">
-      <div class="exercise-header">
-        <div>
-          <h3></h3>
-          <p></p>
+      <section class="view" id="routinesView" data-view="routines">
+        <section class="routine-editor-header">
+          <div class="routine-selector" id="editorRoutineSelector" aria-label="Rutina para editar"></div>
+          <button class="icon-button subtle" id="addRoutineButton" type="button" aria-label="Añadir rutina" title="Añadir rutina">+</button>
+        </section>
+
+        <section class="routine-title-editor">
+          <div>
+            <p class="eyebrow">Plantilla</p>
+            <h2 id="editorRoutineName">Rutina A</h2>
+          </div>
+          <div class="compact-actions">
+            <button class="icon-button subtle" id="renameRoutineButton" type="button" aria-label="Renombrar rutina" title="Renombrar">✎</button>
+            <button class="icon-button danger-icon" id="deleteRoutineButton" type="button" aria-label="Eliminar rutina" title="Eliminar">×</button>
+          </div>
+        </section>
+
+        <div class="editable-list" id="editableExerciseList"></div>
+
+        <form class="add-exercise-form" id="addExerciseForm">
+          <h2>Añadir ejercicio</h2>
+          <label>
+            <span>Nombre</span>
+            <input id="exerciseNameInput" type="text" autocomplete="off" required>
+          </label>
+          <div class="form-grid three-columns">
+            <label>
+              <span>Series</span>
+              <input id="exerciseSetsInput" type="number" min="1" max="12" value="3" required>
+            </label>
+            <label>
+              <span>Objetivo</span>
+              <input id="exerciseTargetInput" type="number" min="1" max="999" value="10" required>
+            </label>
+            <label>
+              <span>Unidad</span>
+              <select id="exerciseMeasureInput">
+                <option value="reps">Reps</option>
+                <option value="seconds">Seg</option>
+              </select>
+            </label>
+          </div>
+          <label id="exerciseWeightLabel">
+            <span>Peso inicial (kg)</span>
+            <input id="exerciseWeightInput" type="number" inputmode="decimal" min="0" step="0.5">
+          </label>
+          <button class="secondary-button full" type="submit">Añadir a la rutina</button>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <nav class="bottom-nav" id="bottomNav" aria-label="Navegación principal">
+    <button class="nav-button active" type="button" data-view-target="home">
+      <span aria-hidden="true">⌂</span><strong>Hoy</strong>
+    </button>
+    <button class="nav-button" type="button" data-view-target="history">
+      <span aria-hidden="true">↗</span><strong>Historial</strong>
+    </button>
+    <button class="nav-button" type="button" data-view-target="routines">
+      <span aria-hidden="true">≡</span><strong>Rutinas</strong>
+    </button>
+  </nav>
+
+  <aside class="timer-dock" id="timerDock" hidden aria-label="Cronómetro de descanso">
+    <div>
+      <span>Descanso</span>
+      <strong id="timerDisplay" aria-live="polite">01:30</strong>
+    </div>
+    <button class="timer-main-button" id="timerToggleButton" type="button">Iniciar</button>
+    <button class="timer-icon-button" id="timerResetButton" type="button" aria-label="Reiniciar cronómetro" title="Reiniciar">↻</button>
+  </aside>
+
+  <dialog class="settings-dialog" id="settingsDialog">
+    <form method="dialog" class="dialog-header">
+      <h2>Ajustes</h2>
+      <button class="icon-button subtle" value="close" aria-label="Cerrar ajustes">×</button>
+    </form>
+    <div class="settings-content">
+      <label>
+        <span>Descanso predeterminado</span>
+        <span class="input-suffix"><input id="restSecondsInput" type="number" min="10" max="600" step="5"><span>seg</span></span>
+      </label>
+      <label>
+        <span>Nombre del Atajo</span>
+        <input id="shortcutNameInput" type="text" value="Calcular Readiness">
+      </label>
+
+      <section class="settings-section">
+        <h3>Copia de seguridad</h3>
+        <div class="settings-actions">
+          <button class="secondary-button" id="shareBackupButton" type="button">Compartir copia</button>
+          <button class="ghost-button" id="downloadBackupButton" type="button">Descargar JSON</button>
+          <label class="file-button">
+            Importar JSON
+            <input id="importInput" type="file" accept="application/json">
+          </label>
         </div>
-        <span class="exercise-progress"></span>
-      </div>
-      <div class="set-list"></div>
-    </article>
-  </template>
+      </section>
 
-  <script src="app.js?v=6"></script>
+      <section class="settings-section about-section">
+        <span>Gym Tracker</span>
+        <strong>Versión 2</strong>
+      </section>
+    </div>
+  </dialog>
+
+  <dialog class="confirm-dialog" id="discardDialog">
+    <form method="dialog">
+      <h2>¿Desechar entrenamiento?</h2>
+      <p>La sesión en curso se pondrá a cero. No cambiarán el historial, los pesos anteriores ni tus marcas.</p>
+      <div class="confirm-actions">
+        <button class="ghost-button" value="cancel">Cancelar</button>
+        <button class="danger-button solid" id="confirmDiscardButton" value="confirm">Desechar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="update-toast" id="updateToast" hidden>
+    <span>Nueva versión disponible</span>
+    <button type="button" id="applyUpdateButton">Actualizar</button>
+  </div>
+
+  <div class="app-toast" id="appToast" hidden role="status" aria-live="polite"></div>
+
+  <script type="module" src="app.js?v=14"></script>
 </body>
 </html>
