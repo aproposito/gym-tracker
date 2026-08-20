@@ -127,25 +127,22 @@ def build():
         actions.extend(chain)
         var_refs[var_name] = final_uuid
 
-    # Fecha: acción "Formatear fecha", extremadamente estándar en Atajos,
-    # aplicada sobre el token especial "Fecha actual" con formato personalizado
-    # AAAA-MM-DD para que Gym Tracker la reconozca.
-    date_uuid = uid()
-    date_action = {
-        "WFWorkflowActionIdentifier": "is.workflow.actions.date",
-        "WFWorkflowActionParameters": {
-            "UUID": date_uuid,
-            "WFDateActionMode": "Get Current Date",
-        }
-    }
-    actions.append(date_action)
-
+    # Fecha: "Formatear fecha" aplicada directamente sobre el token especial
+    # "Fecha actual" (CurrentDate), el mismo que ya está confirmado y en uso
+    # dentro del bloque de texto final. Se probó primero con una acción
+    # "is.workflow.actions.date" separada para obtener la fecha actual, pero
+    # esa acción resultó ser otra cosa (pedía elegir un evento de calendario):
+    # se elimina y se referencia el token directamente, sin acción intermedia.
     format_uuid = uid()
+    current_date_token = {
+        "Value": {"Type": "CurrentDate"},
+        "WFSerializationType": "WFTextTokenAttachment"
+    }
     format_action = {
         "WFWorkflowActionIdentifier": "is.workflow.actions.format.date",
         "WFWorkflowActionParameters": {
             "UUID": format_uuid,
-            "WFDate": output_ref("Current Date", date_uuid),
+            "WFDate": current_date_token,
             "WFDateFormatStyle": "Custom",
             "WFDateFormat": "yyyy-MM-dd"
         }

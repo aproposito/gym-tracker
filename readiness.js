@@ -282,6 +282,22 @@ const FIELD_ALIASES = {
  * un día suelto, un array, o un objeto con `days`. Tolera los nombres de campo
  * de cada origen para que cambiar de transporte no obligue a tocar el parser.
  */
+/**
+ * El Atajo formatea la fecha con un patrón personalizado en iOS ("Custom" +
+ * "yyyy-MM-dd") que no se puede verificar sin el dispositivo. Si el resultado
+ * no es exactamente ISO, se intenta interpretar igualmente; si ni así se
+ * puede, se asume "hoy" en vez de descartar el día — el uso normal es
+ * ejecutar el Atajo y pegar en el momento, así que "hoy" es la suposición
+ * correcta con más frecuencia que un rechazo silencioso.
+ */
+function normalizeDateValue(value) {
+  const text = String(value ?? "").trim().slice(0, 32);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text.slice(0, 10);
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function parseHealthPayload(raw) {
   const source = typeof raw === "string" ? JSON.parse(raw) : raw;
   const list = Array.isArray(source)
@@ -299,8 +315,10 @@ export function parseHealthPayload(raw) {
     for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
       const key = aliases.find((alias) => entry[alias] !== undefined && entry[alias] !== null && entry[alias] !== "");
       if (key === undefined) continue;
-      day[field] = field === "date" ? String(entry[key]).slice(0, 10) : Number(entry[key]);
+      day[field] = field === "date" ? normalizeDateValue(entry[key]) : Number(entry[key]);
     }
+    // Si no hay ninguna clave de fecha reconocible, se descarta: eso sí es un
+    // payload ajeno al esquema, no un formato de fecha imperfecto.
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day.date || "")) continue;
     // Apple entrega la saturación como fracción; el resto del motor la usa en %.
     if (Number.isFinite(day.oxygenSaturation) && day.oxygenSaturation <= 1) {

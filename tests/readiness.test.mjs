@@ -235,3 +235,26 @@ test("los ceros colados en la línea base no hunden el score", () => {
   const result = computeDailyReadiness(normalized, date);
   assert.ok(result.objectiveScore > 55, `un HRV normal debería puntuar bien y salió ${result.objectiveScore}`);
 });
+
+test("una fecha ISO se conserva tal cual", () => {
+  const [day] = parseHealthPayload([{ date: "2026-08-20", hrv: 30 }]);
+  assert.equal(day.date, "2026-08-20");
+});
+
+test("una fecha no-ISO pero interpretable se normaliza a ISO", () => {
+  // Lo que produciría un formato "Medium" en vez del "Custom" pedido, por
+  // ejemplo si el patrón personalizado no se aplicó como se esperaba.
+  const [day] = parseHealthPayload([{ date: "20 ago 2026", hrv: 30 }]);
+  assert.match(day.date, /^\d{4}-\d{2}-\d{2}$/);
+});
+
+test("una fecha ilegible se trata como hoy, no como día inválido", () => {
+  // Caso real: el Atajo dejó sin resolver el marcador de formato personalizado.
+  const [day] = parseHealthPayload([{ date: "yyyy-MM-dd", hrv: 30 }]);
+  const hoy = new Date().toISOString().slice(0, 10);
+  assert.equal(day.date, hoy);
+});
+
+test("sin ninguna clave de fecha reconocible, sí se rechaza", () => {
+  assert.throws(() => parseHealthPayload('{"days":[{"hrv":30}]}'), /fecha válida/);
+});

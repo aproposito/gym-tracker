@@ -10,7 +10,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>1242C5AC-C955-43A3-851E-8CB9C8CC093D</string>
+				<string>C9761962-F4BE-46BD-962E-890DDB04B7CE</string>
 				<key>WFContentItemFilter</key>
 				<dict>
 					<key>Value</key>
@@ -73,7 +73,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>1C930846-AC61-42D9-9B01-8E6D9E639D43</string>
+				<string>57432BB7-E478-4329-838D-6AF3A2E6E90E</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -81,7 +81,7 @@
 						<key>OutputName</key>
 						<string>Health Samples</string>
 						<key>OutputUUID</key>
-						<string>1242C5AC-C955-43A3-851E-8CB9C8CC093D</string>
+						<string>C9761962-F4BE-46BD-962E-890DDB04B7CE</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -96,7 +96,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>D0D16ACE-2200-46B5-B974-84650FCBB07B</string>
+				<string>58C9EE51-BAEA-4E75-9DFB-D830738A4269</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -104,7 +104,7 @@
 						<key>OutputName</key>
 						<string>Item from List</string>
 						<key>OutputUUID</key>
-						<string>1C930846-AC61-42D9-9B01-8E6D9E639D43</string>
+						<string>57432BB7-E478-4329-838D-6AF3A2E6E90E</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -125,7 +125,7 @@
 						<key>OutputName</key>
 						<string>Rounded Number</string>
 						<key>OutputUUID</key>
-						<string>D0D16ACE-2200-46B5-B974-84650FCBB07B</string>
+						<string>58C9EE51-BAEA-4E75-9DFB-D830738A4269</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -142,7 +142,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>A43EC5AB-BF97-4C18-AB94-EADA1CAFBA7E</string>
+				<string>A83B1F20-B451-42CE-ADCF-1C457B3B980E</string>
 				<key>WFContentItemFilter</key>
 				<dict>
 					<key>Value</key>
@@ -205,7 +205,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>DBB12F6B-3C7E-440D-8AA9-309C27274D87</string>
+				<string>55B924C1-68C4-41AC-956F-54EDE46516D3</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -213,7 +213,7 @@
 						<key>OutputName</key>
 						<string>Health Samples</string>
 						<key>OutputUUID</key>
-						<string>A43EC5AB-BF97-4C18-AB94-EADA1CAFBA7E</string>
+						<string>A83B1F20-B451-42CE-ADCF-1C457B3B980E</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -228,7 +228,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>90E85F8E-78C3-4405-9425-5B9C218ED619</string>
+				<string>51FFEEDB-8D3A-4039-A975-73BB60FAFA7D</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -236,7 +236,7 @@
 						<key>OutputName</key>
 						<string>Item from List</string>
 						<key>OutputUUID</key>
-						<string>DBB12F6B-3C7E-440D-8AA9-309C27274D87</string>
+						<string>55B924C1-68C4-41AC-956F-54EDE46516D3</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -257,7 +257,7 @@
 						<key>OutputName</key>
 						<string>Rounded Number</string>
 						<key>OutputUUID</key>
-						<string>90E85F8E-78C3-4405-9425-5B9C218ED619</string>
+						<string>51FFEEDB-8D3A-4039-A975-73BB60FAFA7D</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -274,7 +274,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>D6F0A6A4-F09C-4392-9C29-67452642DF51</string>
+				<string>E6CBE77C-D575-4B6A-ABC2-9DCB4F8B817C</string>
 				<key>WFContentItemFilter</key>
 				<dict>
 					<key>Value</key>
@@ -337,7 +337,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>B8BB9DBF-3325-4C71-84E6-FDBE25E52002</string>
+				<string>05A97A78-25A2-4CBE-AC88-755BC24613B0</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -345,7 +345,7 @@
 						<key>OutputName</key>
 						<string>Health Samples</string>
 						<key>OutputUUID</key>
-						<string>D6F0A6A4-F09C-4392-9C29-67452642DF51</string>
+						<string>E6CBE77C-D575-4B6A-ABC2-9DCB4F8B817C</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -360,7 +360,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>60EF3598-E992-46A4-91DD-33E31034D5CF</string>
+				<string>CFC1BF45-4980-4DF4-8810-CBB51CD85757</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -368,7 +368,7 @@
 						<key>OutputName</key>
 						<string>Item from List</string>
 						<key>OutputUUID</key>
-						<string>B8BB9DBF-3325-4C71-84E6-FDBE25E52002</string>
+						<string>05A97A78-25A2-4CBE-AC88-755BC24613B0</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -389,7 +389,7 @@
 						<key>OutputName</key>
 						<string>Rounded Number</string>
 						<key>OutputUUID</key>
-						<string>60EF3598-E992-46A4-91DD-33E31034D5CF</string>
+						<string>CFC1BF45-4980-4DF4-8810-CBB51CD85757</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -406,7 +406,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>ECFDD73F-A664-40E0-A158-2B19CF66A511</string>
+				<string>30146627-2E18-440F-9FC6-022B03FC214E</string>
 				<key>WFContentItemFilter</key>
 				<dict>
 					<key>Value</key>
@@ -469,7 +469,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>02840334-E324-45B2-B3A1-85645E0A9ED9</string>
+				<string>F742B71F-03C0-4D0C-B5F9-AB6A2E7BFCAA</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -477,7 +477,7 @@
 						<key>OutputName</key>
 						<string>Health Samples</string>
 						<key>OutputUUID</key>
-						<string>ECFDD73F-A664-40E0-A158-2B19CF66A511</string>
+						<string>30146627-2E18-440F-9FC6-022B03FC214E</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -492,7 +492,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C687C3CA-1B7B-4664-8C2C-0E707BDEBBEE</string>
+				<string>234C51E4-EEA1-407D-8E0F-CFCE352578BD</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -500,7 +500,7 @@
 						<key>OutputName</key>
 						<string>Item from List</string>
 						<key>OutputUUID</key>
-						<string>02840334-E324-45B2-B3A1-85645E0A9ED9</string>
+						<string>F742B71F-03C0-4D0C-B5F9-AB6A2E7BFCAA</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -521,7 +521,7 @@
 						<key>OutputName</key>
 						<string>Rounded Number</string>
 						<key>OutputUUID</key>
-						<string>C687C3CA-1B7B-4664-8C2C-0E707BDEBBEE</string>
+						<string>234C51E4-EEA1-407D-8E0F-CFCE352578BD</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -538,7 +538,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>9E4A34F6-AFB3-4953-9193-6E31E136CE48</string>
+				<string>1FB9539A-ECCD-4A07-B49E-8979B676D64B</string>
 				<key>WFContentItemFilter</key>
 				<dict>
 					<key>Value</key>
@@ -601,7 +601,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>007429B6-DA75-4D01-8986-C2F828AE37E0</string>
+				<string>2AF0B5B5-7790-4532-A88C-1A17DFE1E6B1</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -609,7 +609,7 @@
 						<key>OutputName</key>
 						<string>Health Samples</string>
 						<key>OutputUUID</key>
-						<string>9E4A34F6-AFB3-4953-9193-6E31E136CE48</string>
+						<string>1FB9539A-ECCD-4A07-B49E-8979B676D64B</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -624,7 +624,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>B279AF2F-B519-43C0-95AE-B76691F2FE70</string>
+				<string>EFC79BE8-B833-44B6-B29E-1A41AD8D3A5B</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -632,7 +632,7 @@
 						<key>OutputName</key>
 						<string>Item from List</string>
 						<key>OutputUUID</key>
-						<string>007429B6-DA75-4D01-8986-C2F828AE37E0</string>
+						<string>2AF0B5B5-7790-4532-A88C-1A17DFE1E6B1</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -653,7 +653,7 @@
 						<key>OutputName</key>
 						<string>Rounded Number</string>
 						<key>OutputUUID</key>
-						<string>B279AF2F-B519-43C0-95AE-B76691F2FE70</string>
+						<string>EFC79BE8-B833-44B6-B29E-1A41AD8D3A5B</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -666,32 +666,17 @@
 		</dict>
 		<dict>
 			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.date</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>UUID</key>
-				<string>B6A103DE-E46F-49FF-9929-DCCFE994CA0B</string>
-				<key>WFDateActionMode</key>
-				<string>Get Current Date</string>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
 			<string>is.workflow.actions.format.date</string>
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>65C5CF4D-3F66-4EA2-8B4C-B5B2D37B6848</string>
+				<string>6B0D880D-A2A9-455C-A52B-A8F23235070D</string>
 				<key>WFDate</key>
 				<dict>
 					<key>Value</key>
 					<dict>
-						<key>OutputName</key>
-						<string>Current Date</string>
-						<key>OutputUUID</key>
-						<string>B6A103DE-E46F-49FF-9929-DCCFE994CA0B</string>
 						<key>Type</key>
-						<string>ActionOutput</string>
+						<string>CurrentDate</string>
 					</dict>
 					<key>WFSerializationType</key>
 					<string>WFTextTokenAttachment</string>
@@ -708,7 +693,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>40FF510C-0337-4506-80F2-6FC102D7DEC0</string>
+				<string>0AA17FD8-C3BB-4E17-8E90-DE02B701FDCF</string>
 				<key>WFTextActionText</key>
 				<dict>
 					<key>Value</key>
@@ -720,7 +705,7 @@
 								<key>OutputName</key>
 								<string>TEMP</string>
 								<key>OutputUUID</key>
-								<string>B279AF2F-B519-43C0-95AE-B76691F2FE70</string>
+								<string>EFC79BE8-B833-44B6-B29E-1A41AD8D3A5B</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -729,7 +714,7 @@
 								<key>OutputName</key>
 								<string>HRV</string>
 								<key>OutputUUID</key>
-								<string>60EF3598-E992-46A4-91DD-33E31034D5CF</string>
+								<string>CFC1BF45-4980-4DF4-8810-CBB51CD85757</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -738,7 +723,7 @@
 								<key>OutputName</key>
 								<string>RHR</string>
 								<key>OutputUUID</key>
-								<string>D0D16ACE-2200-46B5-B974-84650FCBB07B</string>
+								<string>58C9EE51-BAEA-4E75-9DFB-D830738A4269</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -747,7 +732,7 @@
 								<key>OutputName</key>
 								<string>SpO2</string>
 								<key>OutputUUID</key>
-								<string>90E85F8E-78C3-4405-9425-5B9C218ED619</string>
+								<string>51FFEEDB-8D3A-4039-A975-73BB60FAFA7D</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -756,7 +741,7 @@
 								<key>OutputName</key>
 								<string>RESP</string>
 								<key>OutputUUID</key>
-								<string>C687C3CA-1B7B-4664-8C2C-0E707BDEBBEE</string>
+								<string>234C51E4-EEA1-407D-8E0F-CFCE352578BD</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -765,7 +750,7 @@
 								<key>OutputName</key>
 								<string>FECHA</string>
 								<key>OutputUUID</key>
-								<string>65C5CF4D-3F66-4EA2-8B4C-B5B2D37B6848</string>
+								<string>6B0D880D-A2A9-455C-A52B-A8F23235070D</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -790,7 +775,7 @@
 						<key>OutputName</key>
 						<string>Text</string>
 						<key>OutputUUID</key>
-						<string>40FF510C-0337-4506-80F2-6FC102D7DEC0</string>
+						<string>0AA17FD8-C3BB-4E17-8E90-DE02B701FDCF</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
