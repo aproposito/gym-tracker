@@ -210,13 +210,24 @@ def build():
 
 if __name__ == "__main__":
     import plistlib
+    import tempfile
+
     workflow = build()
     out_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(".")
-    unsigned = out_dir / "entrada.shortcut"
-    unsigned.write_bytes(plistlib.dumps(workflow))
     signed = out_dir / "Datos de salud.shortcut"
-    subprocess.run(
-        ["shortcuts", "sign", "--mode", "anyone", "--input", str(unsigned), "--output", str(signed)],
-        check=True
-    )
-    print(f"Firmado en {signed}")
+
+    # El plist sin firmar es un artefacto intermedio: se escribe en un
+    # directorio temporal para no dejarlo tirado (ni tentado a commitearlo)
+    # junto al archivo final.
+    with tempfile.TemporaryDirectory() as tmp:
+        unsigned = Path(tmp) / "entrada.shortcut"
+        unsigned.write_bytes(plistlib.dumps(workflow))
+        subprocess.run(
+            ["shortcuts", "sign", "--mode", "anyone", "--input", str(unsigned), "--output", str(signed)],
+            check=True
+        )
+
+    size = signed.stat().st_size
+    if size < 10_000:
+        raise SystemExit(f"El archivo firmado parece incompleto ({size} bytes): {signed}")
+    print(f"Firmado en {signed} ({size} bytes)")
