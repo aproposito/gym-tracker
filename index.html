@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=14">
+  <link rel="stylesheet" href="styles.css?v=16">
 </head>
 <body>
   <div class="app-shell">
@@ -27,7 +27,7 @@
 
     <main>
       <section class="view active" id="homeView" data-view="home">
-        <section class="readiness-panel readiness-unknown" id="readinessPanel" aria-labelledby="readinessTitle">
+        <section class="readiness-panel readiness-unknown" id="readinessPanel" aria-labelledby="readinessTitle" hidden>
           <div class="panel-heading">
             <div>
               <p class="eyebrow">Readiness</p>
@@ -43,21 +43,28 @@
               <legend>Energía</legend>
               <div class="segmented-control" id="energyControl">
                 <button type="button" data-readiness-field="energy" data-value="low">Baja</button>
-                <button type="button" data-readiness-field="energy" data-value="normal">Normal</button>
+                <button type="button" data-readiness-field="energy" data-value="normal">Media</button>
                 <button type="button" data-readiness-field="energy" data-value="high">Alta</button>
               </div>
             </fieldset>
             <fieldset class="choice-fieldset">
               <legend>Agujetas</legend>
               <div class="segmented-control" id="sorenessControl">
-                <button type="button" data-readiness-field="soreness" data-value="low">Bajas</button>
-                <button type="button" data-readiness-field="soreness" data-value="medium">Medias</button>
-                <button type="button" data-readiness-field="soreness" data-value="high">Altas</button>
+                <button type="button" data-readiness-field="soreness" data-value="low">Pocas</button>
+                <button type="button" data-readiness-field="soreness" data-value="medium">Algunas</button>
+                <button type="button" data-readiness-field="soreness" data-value="high">Muchas</button>
               </div>
             </fieldset>
           </div>
 
-          <button class="secondary-button full" id="readinessButton" type="button">Actualizar con Apple Salud</button>
+          <div class="readiness-actions">
+            <button class="secondary-button" id="pasteHealthButton" type="button">Pegar datos</button>
+            <label class="file-button subtle">
+              Importar archivo
+              <input id="healthFileInput" type="file" accept="application/json">
+            </label>
+          </div>
+          <p class="readiness-freshness" id="readinessFreshness" hidden></p>
         </section>
 
         <section class="today-panel" aria-labelledby="nextWorkoutTitle">
@@ -126,6 +133,14 @@
           <canvas id="progressChart" height="168" aria-label="Evolución del ejercicio"></canvas>
         </section>
 
+        <section class="progress-panel" aria-labelledby="volumeTitle">
+          <div class="section-heading">
+            <h2 id="volumeTitle">Volumen semanal</h2>
+            <span class="section-count" id="volumeSummary">--</span>
+          </div>
+          <canvas id="volumeChart" height="140" aria-label="Volumen por semana"></canvas>
+        </section>
+
         <section class="plain-section history-section" aria-labelledby="historyTitle">
           <div class="section-heading">
             <h2 id="historyTitle">Sesiones</h2>
@@ -160,23 +175,34 @@
             <span>Nombre</span>
             <input id="exerciseNameInput" type="text" autocomplete="off" required>
           </label>
+          <label>
+            <span>Tipo de serie</span>
+            <select id="exerciseStyleInput">
+              <option value="tricon">TRICON · 9 repeticiones fijas</option>
+              <option value="volumen" selected>Volumen · de 10 a 12 y luego peso</option>
+            </select>
+          </label>
           <div class="form-grid three-columns">
             <label>
               <span>Series</span>
               <input id="exerciseSetsInput" type="number" min="1" max="12" value="3" required>
             </label>
             <label>
-              <span>Objetivo</span>
-              <input id="exerciseTargetInput" type="number" min="1" max="999" value="10" required>
+              <span>Reps mín.</span>
+              <input id="exerciseTargetMinInput" type="number" min="1" max="999" value="10" required>
             </label>
             <label>
-              <span>Unidad</span>
-              <select id="exerciseMeasureInput">
-                <option value="reps">Reps</option>
-                <option value="seconds">Seg</option>
-              </select>
+              <span>Reps máx.</span>
+              <input id="exerciseTargetMaxInput" type="number" min="1" max="999" value="12" required>
             </label>
           </div>
+          <label>
+            <span>Unidad</span>
+            <select id="exerciseMeasureInput">
+              <option value="reps">Reps</option>
+              <option value="seconds">Seg</option>
+            </select>
+          </label>
           <label id="exerciseWeightLabel">
             <span>Peso inicial (kg)</span>
             <input id="exerciseWeightInput" type="number" inputmode="decimal" min="0" step="0.5">
@@ -218,26 +244,36 @@
         <span>Descanso predeterminado</span>
         <span class="input-suffix"><input id="restSecondsInput" type="number" min="10" max="600" step="5"><span>seg</span></span>
       </label>
-      <label>
-        <span>Nombre del Atajo</span>
-        <input id="shortcutNameInput" type="text" value="Calcular Readiness">
-      </label>
+      <section class="settings-section">
+        <label class="switch-row">
+          <span>
+            <strong>Readiness con Apple Salud</strong>
+            <small>Capa opcional. Gym Tracker funciona igual sin ella.</small>
+          </span>
+          <input id="readinessEnabledInput" type="checkbox" role="switch">
+        </label>
+      </section>
 
       <section class="settings-section">
         <h3>Copia de seguridad</h3>
+        <p class="settings-note">
+          Tus entrenamientos viven solo en este dispositivo. Si borras la app o
+          cambias de móvil, se van con ella.
+        </p>
+        <p class="settings-hint" id="backupHint" hidden></p>
         <div class="settings-actions">
-          <button class="secondary-button" id="shareBackupButton" type="button">Compartir copia</button>
-          <button class="ghost-button" id="downloadBackupButton" type="button">Descargar JSON</button>
+          <button class="secondary-button" id="shareBackupButton" type="button">Guardar copia</button>
           <label class="file-button">
-            Importar JSON
+            Restaurar copia
             <input id="importInput" type="file" accept="application/json">
           </label>
         </div>
+        <button class="text-button wide" id="downloadCsvButton" type="button">Exportar CSV para hoja de cálculo</button>
       </section>
 
       <section class="settings-section about-section">
         <span>Gym Tracker</span>
-        <strong>Versión 2</strong>
+        <strong>Versión 3</strong>
       </section>
     </div>
   </dialog>
@@ -260,6 +296,6 @@
 
   <div class="app-toast" id="appToast" hidden role="status" aria-live="polite"></div>
 
-  <script type="module" src="app.js?v=15"></script>
+  <script type="module" src="app.js?v=16"></script>
 </body>
 </html>

@@ -1,24 +1,35 @@
 import {
   STORAGE_KEY,
-  LEGACY_STORAGE_KEY,
-  buildShortcutRunUrl,
+  LEGACY_STORAGE_KEYS,
   cloneData,
   completeWorkoutSession,
   createId,
   createWorkoutSession,
+  defaultIncrement,
+  defaultStyle,
+  defaultVolumeRange,
+  EXERCISE_STYLES,
   discardWorkoutSession,
   emptyReadiness,
   getExerciseProgress,
   getLatestSession,
   getPersonalRecords,
   getSessionTotals,
+  getSessionVolume,
   getSuggestedRoutineId,
+  getWeeklyVolume,
+  normalizeHealthDays,
   normalizeName,
   normalizeReadinessPayload,
   normalizeState,
   todayKey,
   updateReadinessCheckin
 } from "./domain.js";
+import {
+  computeDailyReadiness,
+  mergeHealthDays,
+  parseHealthPayload
+} from "./readiness.js";
 
 const byId = (id) => document.getElementById(id);
 const views = [...document.querySelectorAll(".view")];
@@ -54,7 +65,6 @@ const elements = {
   readinessScore: byId("readinessScore"),
   readinessRecommendation: byId("readinessRecommendation"),
   readinessFactors: byId("readinessFactors"),
-  readinessButton: byId("readinessButton"),
   energyControl: byId("energyControl"),
   sorenessControl: byId("sorenessControl"),
   routineSuggestionLabel: byId("routineSuggestionLabel"),
@@ -92,15 +102,23 @@ const elements = {
   addExerciseForm: byId("addExerciseForm"),
   exerciseNameInput: byId("exerciseNameInput"),
   exerciseSetsInput: byId("exerciseSetsInput"),
-  exerciseTargetInput: byId("exerciseTargetInput"),
+  exerciseStyleInput: byId("exerciseStyleInput"),
+  exerciseTargetMinInput: byId("exerciseTargetMinInput"),
+  exerciseTargetMaxInput: byId("exerciseTargetMaxInput"),
   exerciseMeasureInput: byId("exerciseMeasureInput"),
   exerciseWeightLabel: byId("exerciseWeightLabel"),
   exerciseWeightInput: byId("exerciseWeightInput"),
   settingsDialog: byId("settingsDialog"),
   restSecondsInput: byId("restSecondsInput"),
-  shortcutNameInput: byId("shortcutNameInput"),
+  readinessEnabledInput: byId("readinessEnabledInput"),
+  pasteHealthButton: byId("pasteHealthButton"),
+  healthFileInput: byId("healthFileInput"),
+  readinessFreshness: byId("readinessFreshness"),
+  downloadCsvButton: byId("downloadCsvButton"),
+  backupHint: byId("backupHint"),
+  volumeChart: byId("volumeChart"),
+  volumeSummary: byId("volumeSummary"),
   shareBackupButton: byId("shareBackupButton"),
-  downloadBackupButton: byId("downloadBackupButton"),
   importInput: byId("importInput"),
   discardDialog: byId("discardDialog"),
   confirmDiscardButton: byId("confirmDiscardButton"),
@@ -109,7 +127,7 @@ const elements = {
   appToast: byId("appToast")
 };
 
-processReadinessReturn();
+refreshReadinessFromHealth();
 saveState();
 bindEvents();
 render();
@@ -117,7 +135,7 @@ registerServiceWorker();
 setInterval(tickClocks, 500);
 
 function loadState() {
-  for (const key of [STORAGE_KEY, LEGACY_STORAGE_KEY]) {
+  for (const key of [STORAGE_KEY, ...LEGACY_STORAGE_KEYS]) {
     try {
       const raw = localStorage.getItem(key);
       if (raw) return normalizeState(JSON.parse(raw));
@@ -157,7 +175,8 @@ function bindEvents() {
   elements.timerToggleButton.addEventListener("click", toggleRestTimer);
   elements.timerResetButton.addEventListener("click", resetRestTimer);
 
-  elements.readinessButton.addEventListener("click", launchReadinessShortcut);
+  elements.pasteHealthButton.addEventListener("click", pasteHealthData);
+  elements.healthFileInput.addEventListener("change", importHealthFile);
   document.querySelectorAll("[data-readiness-field]").forEach((button) => {
     button.addEventListener("click", handleReadinessCheckin);
   });
@@ -174,13 +193,14 @@ function bindEvents() {
   elements.editableExerciseList.addEventListener("change", handleRoutineEditorChange);
   elements.addExerciseForm.addEventListener("submit", addExercise);
   elements.exerciseMeasureInput.addEventListener("change", updateAddExerciseFields);
+  elements.exerciseStyleInput.addEventListener("change", updateAddExerciseFields);
 
   elements.settingsButton.addEventListener("click", openSettings);
   elements.settingsDialog.addEventListener("close", saveSettings);
   elements.restSecondsInput.addEventListener("change", saveSettings);
-  elements.shortcutNameInput.addEventListener("change", saveSettings);
+  elements.readinessEnabledInput.addEventListener("change", toggleReadinessLayer);
   elements.shareBackupButton.addEventListener("click", shareBackup);
-  elements.downloadBackupButton.addEventListener("click", downloadBackup);
+  elements.downloadCsvButton.addEventListener("click", downloadCsv);
   elements.importInput.addEventListener("change", importBackup);
 
   elements.applyUpdateButton.addEventListener("click", applyServiceWorkerUpdate);
@@ -238,9 +258,18 @@ function renderHome() {
 }
 
 function renderReadiness() {
+  // Capa opcional: apagada, el panel no existe. Ni hueco, ni gris, ni invitación.
+  if (!state.settings.readinessEnabled) {
+    elements.readinessPanel.hidden = true;
+    return;
+  }
+  elements.readinessPanel.hidden = false;
+
   const readiness = state.readiness || emptyReadiness();
   const isToday = readiness.date === todayKey();
-  const valid = isToday && Number.isFinite(readiness.score);
+  const valid = Number.isFinite(readiness.score);
+  // Un score de otro día se enseña, pero nunca disfrazado del de hoy.
+  const stale = valid && !isToday;
   const band = valid ? readiness.band : "unknown";
   const titles = { green: "Preparado", amber: "Con cautela", red: "Recupera", unknown: "Sin calcular" };
 
@@ -251,38 +280,62 @@ function renderReadiness() {
     "readiness-unknown"
   );
   elements.readinessPanel.classList.add(`readiness-${band}`);
+  elements.readinessPanel.classList.toggle("readiness-stale", stale);
   elements.readinessTitle.textContent = isToday && readiness.updatedAt && !valid
     ? "Datos insuficientes"
-    : !isToday && readiness.date
-      ? "Sin calcular hoy"
+    : stale
+      ? `${titles[band]} · ${formatDate(readiness.date)}`
       : titles[band];
   elements.readinessScore.textContent = valid ? String(readiness.score) : "--";
   elements.readinessScore.setAttribute(
     "aria-label",
     valid ? `Readiness ${readiness.score} sobre 100` : "Readiness sin calcular"
   );
-  elements.readinessRecommendation.textContent = valid
-    ? readiness.recommendation
-    : isToday && readiness.updatedAt
-      ? "Necesitamos al menos dos señales de Apple Salud."
-      : readiness.date
-        ? "Última lectura: " + formatDate(readiness.date)
-        : "Consulta Apple Salud antes de entrenar.";
+  elements.readinessRecommendation.textContent = stale
+    ? "Todavía no hay datos de hoy."
+    : valid
+      ? readiness.recommendation
+      : readiness.updatedAt
+        ? "Hacen falta el HRV o el pulso en reposo, más otra señal."
+        : "Ejecuta el Atajo y pulsa Pegar datos de salud.";
 
   const factors = valid
     ? readiness.factors
-    : isToday && readiness.updatedAt
-      ? ["Faltan datos suficientes de Apple Salud"]
+    : readiness.updatedAt
+      ? ["Faltan señales suficientes de Apple Salud"]
       : [];
   elements.readinessFactors.innerHTML = factors
     .map((factor) => `<li>${escapeHtml(factor)}</li>`)
     .join("");
 
+  const checkinEnabled = isToday && valid;
   document.querySelectorAll("[data-readiness-field]").forEach((button) => {
     const selected = isToday && readiness[button.dataset.readinessField] === button.dataset.value;
     button.classList.toggle("active", selected);
     button.setAttribute("aria-pressed", String(selected));
+    button.disabled = !checkinEnabled;
   });
+  document.querySelectorAll(".checkin-grid .choice-fieldset").forEach((fieldset) => {
+    fieldset.classList.toggle("disabled", !checkinEnabled);
+  });
+
+  renderReadinessFreshness(isToday);
+}
+
+/**
+ * Un score de ayer presentado como el de hoy es peor que no tener score: hace
+ * tomar la decisión del día con datos que ya no describen el día.
+ */
+function renderReadinessFreshness(isToday) {
+  const lastDay = state.healthDays.at(-1)?.date;
+  if (!lastDay) {
+    elements.readinessFreshness.hidden = true;
+    return;
+  }
+  elements.readinessFreshness.hidden = isToday && lastDay === todayKey();
+  elements.readinessFreshness.textContent = lastDay === todayKey()
+    ? "Datos de hoy."
+    : `Últimos datos: ${formatDate(lastDay)}. Ejecuta el Atajo para actualizar.`;
 }
 
 function renderHomeRoutine() {
@@ -391,15 +444,20 @@ function renderSession() {
 function sessionExerciseHtml(exercise) {
   const completed = exercise.sets.filter((set) => set.done).length;
   const unit = exercise.measure === "seconds" ? "seg" : "reps";
+  const first = exercise.sets[0];
+  const range = first ? formatRange(first.targetMin, first.targetMax, unit) : "";
+  const styleTag = exercise.progression?.style === "tricon" ? " · TRICON" : "";
+  const hint = progressionHint(exercise.progression);
   return `
     <article class="exercise-card" data-session-exercise-id="${escapeAttribute(exercise.id)}">
       <div class="exercise-header">
         <div>
           <h2>${escapeHtml(exercise.name)}</h2>
-          <p>${exercise.sets.length} series · ${exercise.sets[0]?.target || 0} ${unit}</p>
+          <p>${exercise.sets.length} series · ${range}${styleTag}</p>
         </div>
         <span class="exercise-progress">${completed}/${exercise.sets.length}</span>
       </div>
+      ${hint ? `<p class="progression-hint ${escapeAttribute(hint.tone)}">${escapeHtml(hint.text)}</p>` : ""}
       <div class="set-list">
         ${exercise.sets.map((set, index) => sessionSetHtml(exercise, set, index)).join("")}
       </div>
@@ -408,13 +466,22 @@ function sessionExerciseHtml(exercise) {
 
 function sessionSetHtml(exercise, set, index) {
   const isTime = exercise.measure === "seconds";
-  const previous = set.previousWeight
-    ? `<small class="previous-weight">Anterior ${escapeHtml(set.previousWeight)} kg</small>`
-    : '<small class="previous-weight">Sin peso anterior</small>';
+  const unit = isTime ? "seg" : "reps";
+  const previousParts = [];
+  if (!isTime && set.previousWeight) previousParts.push(`${set.previousWeight} kg`);
+  if (set.previousReps) previousParts.push(`${set.previousReps} ${unit}`);
+  const previous = previousParts.length
+    ? `<small class="previous-weight">Anterior ${escapeHtml(previousParts.join(" · "))}</small>`
+    : '<small class="previous-weight">Sin referencia anterior</small>';
+
   return `
     <div class="set-row ${isTime ? "time-row" : ""} ${set.done ? "done" : ""}" data-set-index="${index}">
       <span class="set-index">${index + 1}</span>
-      <div class="set-target">${set.target} ${isTime ? "seg" : "reps"}${isTime ? "" : previous}</div>
+      <div class="set-target">${escapeHtml(formatRange(set.targetMin, set.targetMax, unit))}${previous}</div>
+      <label class="reps-input" aria-label="${isTime ? "Segundos" : "Repeticiones"} de la serie ${index + 1}">
+        <input type="number" inputmode="numeric" min="0" max="999" step="1" value="${escapeAttribute(set.reps ?? "")}" data-session-reps>
+        <span>${unit}</span>
+      </label>
       ${isTime ? "" : `
         <label class="weight-input" aria-label="Peso de la serie ${index + 1}">
           <input type="number" inputmode="decimal" min="0" step="0.5" value="${escapeAttribute(set.weight)}" data-session-weight>
@@ -424,14 +491,64 @@ function sessionSetHtml(exercise, set, index) {
     </div>`;
 }
 
+function formatRange(min, max, unit) {
+  return min === max ? `${min} ${unit}` : `${min}-${max} ${unit}`;
+}
+
+/**
+ * Traduce la decisión de progresión a una frase. El motor devuelve datos; el
+ * texto se decide aquí para poder cambiarlo sin tocar la lógica.
+ */
+function progressionHint(progression) {
+  if (!progression) return null;
+  const weight = progression.suggestedWeight;
+  if (progression.action === "increase") {
+    return { tone: "up", text: `Toca subir: ${formatNumber(Number(weight))} kg desde ${formatNumber(Number(progression.currentWeight))} kg` };
+  }
+  if (progression.action === "deload") {
+    return { tone: "down", text: `Baja a ${formatNumber(Number(weight))} kg y reconstruye` };
+  }
+  if (progression.blockedByReadiness) {
+    return { tone: "hold", text: "Rango completado, pero hoy no toca subir" };
+  }
+  if (progression.reason === "faltan-sesiones-al-tope") {
+    const faltan = progression.sessionsRemaining;
+    return {
+      tone: "hold",
+      text: faltan === 1
+        ? "Una sesión más completa y subes peso"
+        : `${faltan} sesiones completas más y subes peso`
+    };
+  }
+  if (progression.style === "tricon") {
+    return { tone: "hold", text: `Completa las ${progression.repRange.min} en las tres series` };
+  }
+  if (progression.stale) {
+    return { tone: "hold", text: "Tres sesiones iguales: prueba a sumar una repetición" };
+  }
+  if (progression.reason === "progresando-en-repeticiones") {
+    return { tone: "hold", text: `Sube hasta ${progression.repRange.max} antes de tocar el peso` };
+  }
+  return null;
+}
+
 function handleSessionInput(event) {
-  if (!event.target.matches("[data-session-weight]") || !state.activeSession) return;
+  const isWeight = event.target.matches("[data-session-weight]");
+  const isReps = event.target.matches("[data-session-reps]");
+  if ((!isWeight && !isReps) || !state.activeSession) return;
+
   const exerciseElement = event.target.closest("[data-session-exercise-id]");
   const setElement = event.target.closest("[data-set-index]");
   const exercise = state.activeSession.exercises.find((item) => item.id === exerciseElement?.dataset.sessionExerciseId);
   const set = exercise?.sets[Number(setElement?.dataset.setIndex)];
   if (!set) return;
-  set.weight = cleanInputWeight(event.target.value);
+
+  if (isWeight) {
+    set.weight = cleanInputWeight(event.target.value);
+  } else {
+    const reps = Number.parseInt(event.target.value, 10);
+    set.reps = Number.isFinite(reps) && reps > 0 ? Math.min(reps, 999) : null;
+  }
   saveState();
 }
 
@@ -550,43 +667,86 @@ function tickClocks() {
   }
 }
 
+function toggleReadinessLayer() {
+  const enabled = elements.readinessEnabledInput.checked;
+  if (!enabled && state.healthDays.length) {
+    const borrar = window.confirm(
+      "Readiness desactivado. ¿Borrar también los datos de salud guardados en el dispositivo?"
+    );
+    if (borrar) {
+      state.healthDays = [];
+      state.readiness = emptyReadiness();
+    }
+  }
+  state.settings.readinessEnabled = enabled;
+  if (enabled) refreshReadinessFromHealth();
+  saveState();
+  render();
+  showToast(enabled ? "Readiness activado." : "Readiness desactivado.");
+}
+
+/** Recalcula el score de hoy a partir de los días de salud guardados. */
+function refreshReadinessFromHealth() {
+  if (!state.settings.readinessEnabled || !state.healthDays?.length) return;
+  const today = todayKey();
+  const result = computeDailyReadiness(state.healthDays, today)
+    || computeDailyReadiness(state.healthDays, state.healthDays.at(-1).date);
+  if (!result) return;
+  state.readiness = normalizeReadinessPayload(result, state.readiness);
+}
+
+async function pasteHealthData() {
+  if (!navigator.clipboard?.readText) {
+    showToast("Este navegador no permite pegar. Usa Importar archivo.");
+    return;
+  }
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text.trim()) {
+      showToast("El portapapeles está vacío.");
+      return;
+    }
+    ingestHealthDays(parseHealthPayload(text));
+  } catch (error) {
+    console.error("No se pudo leer el portapapeles", error);
+    showToast("No se pudo leer el portapapeles.");
+  }
+}
+
+async function importHealthFile(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  try {
+    ingestHealthDays(parseHealthPayload(await file.text()));
+  } catch (error) {
+    console.error("Archivo de salud no válido", error);
+    showToast("El archivo no tiene datos de salud válidos.");
+  }
+}
+
+function ingestHealthDays(days) {
+  state.healthDays = normalizeHealthDays(mergeHealthDays(state.healthDays, days));
+  refreshReadinessFromHealth();
+  saveState();
+  renderHome();
+  const score = state.readiness?.score;
+  showToast(
+    Number.isFinite(score)
+      ? `Readiness ${score}. ${days.length} ${days.length === 1 ? "día" : "días"} añadidos.`
+      : `${days.length} ${days.length === 1 ? "día" : "días"} añadidos. Aún faltan señales.`
+  );
+}
+
 function handleReadinessCheckin(event) {
   const field = event.currentTarget.dataset.readinessField;
   const value = event.currentTarget.dataset.value;
-  if (state.readiness.date !== todayKey()) {
-    state.readiness = { ...emptyReadiness(), date: todayKey() };
-  }
+  // Solo se ajusta el score de hoy: la interfaz ya impide llegar aquí sin él.
+  if (state.readiness.date !== todayKey() || !Number.isFinite(state.readiness.score)) return;
   const nextValue = state.readiness[field] === value ? null : value;
   state.readiness = updateReadinessCheckin(state.readiness, field, nextValue);
   saveState();
   renderReadiness();
-}
-
-function processReadinessReturn() {
-  const url = new URL(window.location.href);
-  const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
-  const encoded = hashParams.get("readiness") || url.searchParams.get("readiness") || url.searchParams.get("result");
-  if (!encoded) return;
-
-  try {
-    const payload = JSON.parse(encoded);
-    state.readiness = normalizeReadinessPayload(payload, state.readiness);
-    url.hash = "";
-    url.searchParams.delete("readiness");
-    url.searchParams.delete("result");
-    window.history.replaceState({}, document.title, url.toString());
-    showToast(state.readiness.score === null ? "Readiness: datos insuficientes." : "Readiness actualizado.");
-  } catch (error) {
-    console.error("Resultado de readiness no válido", error);
-    showToast("No se pudo leer el resultado de Apple Salud.");
-  }
-}
-
-function launchReadinessShortcut() {
-  const shortcutName = state.settings.shortcutName.trim() || "Calcular Readiness";
-  const callbackUrl = `${window.location.origin}${window.location.pathname}`;
-  showToast("Abriendo Atajos…");
-  window.location.href = buildShortcutRunUrl(shortcutName, callbackUrl);
 }
 
 function renderHistory() {
@@ -596,7 +756,58 @@ function renderHistory() {
     ? sessions.map(historySessionHtml).join("")
     : '<div class="empty-state">Guarda un entrenamiento para empezar el historial</div>';
   renderProgressOptions();
-  if (currentView === "history") requestAnimationFrame(renderProgress);
+  renderVolumeSummary();
+  if (currentView === "history") requestAnimationFrame(() => {
+    renderProgress();
+    drawVolumeChart(getWeeklyVolume(state.history));
+  });
+}
+
+function renderVolumeSummary() {
+  const weeks = getWeeklyVolume(state.history, 4);
+  const lastWeek = weeks.at(-1);
+  elements.volumeSummary.textContent = lastWeek
+    ? `${formatNumber(lastWeek.volume)} kg · ${lastWeek.sessions} ${lastWeek.sessions === 1 ? "sesión" : "sesiones"}`
+    : "--";
+}
+
+function drawVolumeChart(weeks) {
+  const canvas = elements.volumeChart;
+  const { context, width, height } = prepareCanvas(canvas, 140);
+  const padding = { top: 14, right: 12, bottom: 24, left: 12 };
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+
+  if (!weeks.length) {
+    drawEmptyChart(context, width, height, "Guarda sesiones con peso y repeticiones");
+    return;
+  }
+
+  const max = Math.max(...weeks.map((week) => week.volume), 1);
+  const gap = 6;
+  // Con una o dos semanas, una barra a todo lo ancho parece un error de dibujo.
+  const barWidth = Math.min(56, Math.max(6, plotWidth / weeks.length - gap));
+  const usedWidth = weeks.length * barWidth + (weeks.length - 1) * gap;
+  const startX = padding.left + Math.max(0, (plotWidth - usedWidth) / 2);
+
+  weeks.forEach((week, index) => {
+    const barHeight = (week.volume / max) * plotHeight;
+    const x = startX + index * (barWidth + gap);
+    const y = padding.top + plotHeight - barHeight;
+    context.fillStyle = index === weeks.length - 1 ? "#26735f" : "#a8c4ba";
+    context.beginPath();
+    context.roundRect(x, y, barWidth, Math.max(barHeight, 2), 3);
+    context.fill();
+  });
+
+  context.fillStyle = "#68706d";
+  context.font = "11px -apple-system, BlinkMacSystemFont, sans-serif";
+  context.textAlign = "center";
+  const etiqueta = (week) => week.week.replace(/^\d{4}-W/, "sem ");
+  context.fillText(etiqueta(weeks[0]), startX + barWidth / 2, height - 7);
+  if (weeks.length > 1) {
+    context.fillText(etiqueta(weeks.at(-1)), startX + usedWidth - barWidth / 2, height - 7);
+  }
 }
 
 function historySessionHtml(session) {
@@ -604,12 +815,14 @@ function historySessionHtml(session) {
   const readiness = Number.isFinite(session.readiness?.score)
     ? `<span>Readiness ${session.readiness.score}</span>`
     : "";
+  const volume = getSessionVolume(session);
+  const volumeLabel = volume ? ` · ${formatNumber(volume)} kg` : "";
   return `
     <details class="history-card">
       <summary>
         <div>
           <strong>${escapeHtml(session.routineName)}</strong>
-          <p>${escapeHtml(formatDate(session.completedAt))} · ${formatDuration(session.durationSeconds)}</p>
+          <p>${escapeHtml(formatDate(session.completedAt))} · ${formatDuration(session.durationSeconds)}${volumeLabel}</p>
         </div>
         <div class="history-score">${totals.done}/${totals.total}${readiness}</div>
       </summary>
@@ -621,15 +834,19 @@ function historySessionHtml(session) {
 
 function historyExerciseHtml(exercise) {
   const unit = exercise.measure === "seconds" ? "seg" : "reps";
+  const first = exercise.sets[0];
+  const range = first ? formatRange(first.targetMin, first.targetMax, unit) : "";
   return `
     <div class="history-exercise">
       <strong>${escapeHtml(exercise.name)}</strong>
-      <p>${exercise.sets.length} series · ${exercise.sets[0]?.target || 0} ${unit}</p>
+      <p>${exercise.sets.length} series · objetivo ${escapeHtml(range)}</p>
       <div class="history-set-list">
         ${exercise.sets.map((set, index) => {
+          // Se muestra lo realizado; el historial anterior a V3 no lo registró.
+          const done = set.reps ? `${set.reps} ${unit}` : `? ${unit}`;
           const value = exercise.measure === "seconds"
-            ? `${set.target} seg`
-            : `${set.weight || "--"} kg · ${set.target} reps`;
+            ? done
+            : `${set.weight || "--"} kg · ${done}`;
           return `<span class="${set.done ? "done" : ""}">${index + 1}: ${escapeHtml(value)}</span>`;
         }).join("")}
       </div>
@@ -685,11 +902,9 @@ function renderProgress() {
   drawProgressChart(points);
 }
 
-function drawProgressChart(points) {
-  const canvas = elements.progressChart;
+function prepareCanvas(canvas, height) {
   const rect = canvas.getBoundingClientRect();
   const width = Math.max(280, Math.round(rect.width || 320));
-  const height = 168;
   const ratio = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.round(width * ratio);
   canvas.height = Math.round(height * ratio);
@@ -698,6 +913,18 @@ function drawProgressChart(points) {
   context.clearRect(0, 0, width, height);
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, height);
+  return { context, width, height };
+}
+
+function drawEmptyChart(context, width, height, message) {
+  context.fillStyle = "#68706d";
+  context.font = "13px -apple-system, BlinkMacSystemFont, sans-serif";
+  context.textAlign = "center";
+  context.fillText(message, width / 2, height / 2 + 4);
+}
+
+function drawProgressChart(points) {
+  const { context, width, height } = prepareCanvas(elements.progressChart, 168);
 
   const padding = { top: 16, right: 12, bottom: 28, left: 12 };
   const plotWidth = width - padding.left - padding.right;
@@ -713,10 +940,7 @@ function drawProgressChart(points) {
   }
 
   if (!points.length) {
-    context.fillStyle = "#68706d";
-    context.font = "13px -apple-system, BlinkMacSystemFont, sans-serif";
-    context.textAlign = "center";
-    context.fillText("Completa series para ver tu evolución", width / 2, height / 2 + 4);
+    drawEmptyChart(context, width, height, "Completa series para ver tu evolución");
     return;
   }
 
@@ -787,15 +1011,35 @@ function editableExerciseHtml(exercise, index, total) {
           <button type="button" data-edit-action="move-down" aria-label="Bajar ejercicio" ${index === total - 1 ? "disabled" : ""}>↓</button>
         </div>
       </div>
-      <div class="form-grid three-columns">
+      <div class="form-grid two-columns">
         <label><span>Series</span><input type="number" min="1" max="12" value="${exercise.setCount}" data-edit-field="setCount"></label>
-        <label><span>Objetivo</span><input type="number" min="1" max="999" value="${exercise.target}" data-edit-field="target"></label>
         <label><span>Unidad</span><select data-edit-field="measure"><option value="reps" ${exercise.measure === "reps" ? "selected" : ""}>Reps</option><option value="seconds" ${exercise.measure === "seconds" ? "selected" : ""}>Seg</option></select></label>
       </div>
-      <label class="edit-weight" ${exercise.measure === "seconds" ? "hidden" : ""}>
-        <span>Peso inicial (kg)</span>
-        <input type="number" inputmode="decimal" min="0" step="0.5" value="${escapeAttribute(exercise.defaultWeight)}" data-edit-field="defaultWeight">
+      <label>
+        <span>Tipo de serie</span>
+        <select data-edit-field="style">
+          <option value="tricon" ${exercise.style === "tricon" ? "selected" : ""}>TRICON · repeticiones fijas</option>
+          <option value="volumen" ${exercise.style === "volumen" ? "selected" : ""}>Volumen · sube repeticiones y luego peso</option>
+        </select>
       </label>
+      <div class="form-grid two-columns" data-range-fields ${exercise.style === "tricon" ? "hidden" : ""}>
+        <label><span>Mín.</span><input type="number" min="1" max="999" value="${exercise.targetMin}" data-edit-field="targetMin"></label>
+        <label><span>Máx.</span><input type="number" min="1" max="999" value="${exercise.targetMax}" data-edit-field="targetMax"></label>
+      </div>
+      <label data-fixed-field ${exercise.style === "tricon" ? "" : "hidden"}>
+        <span>Repeticiones</span>
+        <input type="number" min="1" max="999" value="${exercise.targetMin}" data-edit-field="fixedReps">
+      </label>
+      <div class="form-grid two-columns">
+        <label class="edit-weight" ${exercise.measure === "seconds" ? "hidden" : ""}>
+          <span>Peso inicial (kg)</span>
+          <input type="number" inputmode="decimal" min="0" step="0.5" value="${escapeAttribute(exercise.defaultWeight)}" data-edit-field="defaultWeight">
+        </label>
+        <label>
+          <span>Subida (${exercise.measure === "seconds" ? "seg" : "kg"})</span>
+          <input type="number" inputmode="decimal" min="0.25" step="0.25" value="${escapeAttribute(exercise.increment)}" data-edit-field="increment">
+        </label>
+      </div>
       <div class="edit-exercise-actions">
         <button class="secondary-button" type="button" data-edit-action="save">Guardar</button>
         <button class="danger-button" type="button" data-edit-action="remove">Quitar</button>
@@ -847,10 +1091,18 @@ function deleteRoutine() {
 }
 
 function handleRoutineEditorChange(event) {
-  if (!event.target.matches('[data-edit-field="measure"]')) return;
   const article = event.target.closest("[data-template-exercise-id]");
-  const weightLabel = article?.querySelector(".edit-weight");
-  if (weightLabel) weightLabel.hidden = event.target.value === "seconds";
+  if (!article) return;
+
+  if (event.target.matches('[data-edit-field="measure"]')) {
+    const weightLabel = article.querySelector(".edit-weight");
+    if (weightLabel) weightLabel.hidden = event.target.value === "seconds";
+  }
+  if (event.target.matches('[data-edit-field="style"]')) {
+    const tricon = event.target.value === "tricon";
+    article.querySelector("[data-range-fields]").hidden = tricon;
+    article.querySelector("[data-fixed-field]").hidden = !tricon;
+  }
 }
 
 function handleRoutineEditorClick(event) {
@@ -878,13 +1130,27 @@ function handleRoutineEditorClick(event) {
       showToast("El ejercicio necesita un nombre.");
       return;
     }
+    const measure = values.measure === "seconds" ? "seconds" : "reps";
+    const style = values.style === "tricon" ? "tricon" : "volumen";
+    const increment = Number(values.increment);
+    // TRICON no tiene rango: mínimo y máximo son el mismo número.
+    const targetMin = style === "tricon"
+      ? clampNumber(values.fixedReps, 1, 999, EXERCISE_STYLES.tricon.reps)
+      : clampNumber(values.targetMin, 1, 999, EXERCISE_STYLES.volumen.repsMin);
     routine.exercises[exerciseIndex] = {
       ...routine.exercises[exerciseIndex],
       name: name.slice(0, 80),
       setCount: clampNumber(values.setCount, 1, 12, 3),
-      target: clampNumber(values.target, 1, 999, 10),
-      measure: values.measure === "seconds" ? "seconds" : "reps",
-      defaultWeight: values.measure === "seconds" ? "" : cleanInputWeight(values.defaultWeight)
+      style,
+      targetMin,
+      targetMax: style === "tricon"
+        ? targetMin
+        : clampNumber(values.targetMax, targetMin, 999, defaultVolumeRange(targetMin, measure).max),
+      measure,
+      increment: Number.isFinite(increment) && increment > 0
+        ? increment
+        : defaultIncrement({ name, measure }),
+      defaultWeight: measure === "seconds" ? "" : cleanInputWeight(values.defaultWeight)
     };
     showToast("Ejercicio actualizado.");
   } else {
@@ -902,18 +1168,28 @@ function addExercise(event) {
   const name = elements.exerciseNameInput.value.trim();
   if (!name) return;
   const measure = elements.exerciseMeasureInput.value === "seconds" ? "seconds" : "reps";
+  const style = elements.exerciseStyleInput.value === "tricon" ? "tricon" : "volumen";
+  const targetMin = style === "tricon"
+    ? EXERCISE_STYLES.tricon.reps
+    : clampNumber(elements.exerciseTargetMinInput.value, 1, 999, EXERCISE_STYLES.volumen.repsMin);
   routine.exercises.push({
     id: createId(),
     name: name.slice(0, 80),
     setCount: clampNumber(elements.exerciseSetsInput.value, 1, 12, 3),
-    target: clampNumber(elements.exerciseTargetInput.value, 1, 999, 10),
+    style,
+    targetMin,
+    targetMax: style === "tricon"
+      ? targetMin
+      : clampNumber(elements.exerciseTargetMaxInput.value, targetMin, 999, defaultVolumeRange(targetMin, measure).max),
     measure,
+    increment: defaultIncrement({ name, measure }),
     defaultWeight: measure === "seconds" ? "" : cleanInputWeight(elements.exerciseWeightInput.value)
   });
   saveState();
   elements.addExerciseForm.reset();
   elements.exerciseSetsInput.value = "3";
-  elements.exerciseTargetInput.value = "10";
+  elements.exerciseTargetMinInput.value = "10";
+  elements.exerciseTargetMaxInput.value = "12";
   updateAddExerciseFields();
   renderRoutines();
   showToast("Ejercicio añadido.");
@@ -921,6 +1197,9 @@ function addExercise(event) {
 
 function updateAddExerciseFields() {
   elements.exerciseWeightLabel.hidden = elements.exerciseMeasureInput.value === "seconds";
+  const tricon = elements.exerciseStyleInput.value === "tricon";
+  elements.exerciseTargetMinInput.closest("label").hidden = tricon;
+  elements.exerciseTargetMaxInput.closest("label").hidden = tricon;
 }
 
 function currentEditorRoutine() {
@@ -929,14 +1208,14 @@ function currentEditorRoutine() {
 
 function openSettings() {
   elements.restSecondsInput.value = String(state.settings.restSeconds);
-  elements.shortcutNameInput.value = state.settings.shortcutName;
+  elements.readinessEnabledInput.checked = Boolean(state.settings.readinessEnabled);
+  renderBackupHint();
   openDialog(elements.settingsDialog);
 }
 
 function saveSettings() {
   const restSeconds = clampNumber(elements.restSecondsInput.value, 10, 600, state.settings.restSeconds);
   state.settings.restSeconds = restSeconds;
-  state.settings.shortcutName = elements.shortcutNameInput.value.trim().slice(0, 80) || "Calcular Readiness";
   if (state.activeSession && !state.activeSession.restTimer.running) {
     state.activeSession.restTimer.duration = restSeconds;
     state.activeSession.restTimer.remaining = restSeconds;
@@ -957,23 +1236,91 @@ function backupFile() {
   return new File([backupJson()], `gym-tracker-${todayKey()}.json`, { type: "application/json" });
 }
 
+/** Comparte donde se puede (iPhone) y descarga donde no (escritorio). */
 async function shareBackup() {
   const file = backupFile();
   try {
     if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
       await navigator.share({ title: "Copia de Gym Tracker", files: [file] });
+      markBackupDone();
       return;
     }
     downloadFile(file);
+    markBackupDone();
     showToast("Copia descargada.");
   } catch (error) {
     if (error.name !== "AbortError") showToast("No se pudo compartir la copia.");
   }
 }
 
-function downloadBackup() {
-  downloadFile(backupFile());
-  showToast("Copia descargada.");
+/** Una fila por serie completada: legible en cualquier hoja de cálculo. */
+function historyCsv() {
+  const rows = [[
+    "fecha", "rutina", "ejercicio", "medida", "serie",
+    "objetivo_min", "objetivo_max", "realizado", "peso_kg", "volumen_kg", "readiness"
+  ]];
+
+  for (const session of [...state.history].sort((a, b) => sessionTimestamp(a) - sessionTimestamp(b))) {
+    const date = (session.completedAt || "").slice(0, 10);
+    const readiness = Number.isFinite(session.readiness?.score) ? session.readiness.score : "";
+    for (const exercise of session.exercises || []) {
+      exercise.sets.forEach((set, index) => {
+        if (!set.done) return;
+        const weight = Number(set.weight);
+        const reps = Number(set.reps);
+        const volume = exercise.measure === "seconds" || !Number.isFinite(weight) || !Number.isFinite(reps)
+          ? ""
+          : Math.round(weight * reps);
+        rows.push([
+          date, session.routineName, exercise.name, exercise.measure, index + 1,
+          set.targetMin ?? "", set.targetMax ?? "", set.reps ?? "", set.weight ?? "", volume, readiness
+        ]);
+      });
+    }
+  }
+
+  return rows.map((row) => row.map(csvCell).join(",")).join("\n");
+}
+
+function csvCell(value) {
+  const text = String(value ?? "");
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function downloadCsv() {
+  if (!state.history.length) {
+    showToast("Aún no hay sesiones que exportar.");
+    return;
+  }
+  downloadFile(new File([historyCsv()], `gym-tracker-${todayKey()}.csv`, { type: "text/csv" }));
+  showToast("CSV descargado.");
+}
+
+function markBackupDone() {
+  state.settings.lastBackupAt = new Date().toISOString();
+  saveState();
+  renderBackupHint();
+}
+
+const BACKUP_REMINDER_DAYS = 30;
+
+function renderBackupHint() {
+  if (!state.history.length) {
+    elements.backupHint.hidden = true;
+    return;
+  }
+  const last = Date.parse(state.settings.lastBackupAt || "");
+  const days = Number.isFinite(last)
+    ? Math.floor((Date.now() - last) / 86400000)
+    : null;
+
+  if (days === null) {
+    elements.backupHint.hidden = false;
+    elements.backupHint.textContent = "Nunca has guardado una copia. Los datos viven solo en este dispositivo.";
+    return;
+  }
+  elements.backupHint.hidden = days < BACKUP_REMINDER_DAYS;
+  elements.backupHint.textContent = `Última copia hace ${days} días.`;
 }
 
 function downloadFile(file) {
@@ -996,7 +1343,7 @@ async function importBackup(event) {
     if (!window.confirm("¿Sustituir los datos actuales por esta copia?")) return;
     state = imported;
     elements.restSecondsInput.value = String(imported.settings.restSeconds);
-    elements.shortcutNameInput.value = imported.settings.shortcutName;
+    elements.readinessEnabledInput.checked = Boolean(imported.settings.readinessEnabled);
     editorRoutineId = state.settings.selectedRoutineId;
     currentView = state.activeSession ? "session" : "home";
     saveState();
