@@ -9,9 +9,20 @@ Solo se cambia la cadena "Type" de cada filtro:
     tal cual en el atajo real).
   - "Heart Rate Variability SDNN": inferida por el mismo patrón de
     transformación CamelCase -> Title Case que acertó en las dos anteriores,
-    corroborada por una referencia técnica de HealthKit, pero SIN confirmar
-    contra un atajo real. Si Shortcuts la marca con un aviso al abrir, se
-    reselecciona de la lista en 5 segundos: el resto del atajo sigue intacto.
+    corroborada por una referencia técnica de HealthKit. Confirmada en la
+    práctica: funcionó a la primera en el dispositivo real (iOS 26.6),
+    mientras que "Resting Heart Rate" -que sí venía de un atajo real- no lo
+    hizo. Ninguna cadena está garantizada al 100%; el mecanismo sí lo está.
+  - "Respiratory Rate" y "Apple Sleeping Wrist Temperature": mismo tipo de
+    inferencia que HRV, sin confirmar. Si Shortcuts marca cualquiera de estas
+    con un aviso al abrir, se reselecciona de la lista en unos segundos: el
+    resto del atajo sigue intacto.
+
+Sueño queda fuera a propósito: HealthKit registra la noche en varios tramos
+(profundo, REM, ligero...) y sumar sus duraciones necesita un mecanismo
+distinto (Calcular estadísticas sobre "Duración") que no se ha podido
+verificar contra un atajo real. Añadirlo a ciegas arriesgaría un número sin
+sentido en vez de una señal ausente, que es peor.
 """
 import json
 import subprocess
@@ -109,6 +120,8 @@ def build():
         ("Resting Heart Rate", "RHR"),
         ("Oxygen Saturation", "SpO2"),
         ("Heart Rate Variability SDNN", "HRV"),  # mejor esfuerzo, ver docstring
+        ("Respiratory Rate", "RESP"),  # mejor esfuerzo, mismo patrón que acertó con SpO2/HRV
+        ("Apple Sleeping Wrist Temperature", "TEMP"),  # mejor esfuerzo
     ]:
         chain, final_uuid = metric_chain(health_type, var_name)
         actions.extend(chain)
@@ -144,9 +157,10 @@ def build():
     # placeholder original del usuario y en el atajo real de referencia.
     template = (
         '{{"date":"{FECHA}","hrv":{HRV},"restingHeartRate":{RHR},'
-        '"oxygenSaturation":{SpO2}}}'
+        '"oxygenSaturation":{SpO2},"respiratoryRate":{RESP},'
+        '"wristTemperature":{TEMP}}}'
     )
-    order = ["FECHA", "HRV", "RHR", "SpO2"]
+    order = ["FECHA", "HRV", "RHR", "SpO2", "RESP", "TEMP"]
     plain = template.format(**{k: "￼" for k in order})
 
     attachments = {}
