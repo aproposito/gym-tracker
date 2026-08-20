@@ -113,6 +113,8 @@ const elements = {
   readinessEnabledInput: byId("readinessEnabledInput"),
   pasteHealthButton: byId("pasteHealthButton"),
   healthFileInput: byId("healthFileInput"),
+  pasteFallback: byId("pasteFallback"),
+  pasteFallbackArea: byId("pasteFallbackArea"),
   readinessFreshness: byId("readinessFreshness"),
   downloadCsvButton: byId("downloadCsvButton"),
   backupHint: byId("backupHint"),
@@ -177,6 +179,7 @@ function bindEvents() {
 
   elements.pasteHealthButton.addEventListener("click", pasteHealthData);
   elements.healthFileInput.addEventListener("change", importHealthFile);
+  elements.pasteFallbackArea.addEventListener("input", handlePasteFallbackInput);
   document.querySelectorAll("[data-readiness-field]").forEach((button) => {
     button.addEventListener("click", handleReadinessCheckin);
   });
@@ -695,21 +698,50 @@ function refreshReadinessFromHealth() {
   state.readiness = normalizeReadinessPayload(result, state.readiness);
 }
 
+/**
+ * navigator.clipboard.readText() solo es fiable cuando el contenido lo
+ * escribió una página del mismo origen; si viene de una app nativa (el
+ * Atajo), WebKit exige un gesto de pegado explícito del sistema, y en una
+ * PWA instalada en pantalla de inicio en iOS puede no funcionar en absoluto.
+ * Se intenta igualmente por si el contexto lo permite, pero ante cualquier
+ * fallo se cae al campo de pegado manual, que usa el gesto nativo de iOS y
+ * no depende de esa API.
+ */
 async function pasteHealthData() {
-  if (!navigator.clipboard?.readText) {
-    showToast("Este navegador no permite pegar. Usa Importar archivo.");
-    return;
-  }
-  try {
-    const text = await navigator.clipboard.readText();
-    if (!text.trim()) {
-      showToast("El portapapeles está vacío.");
-      return;
+  if (navigator.clipboard?.readText) {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text.trim()) {
+        ingestHealthDays(parseHealthPayload(text));
+        return;
+      }
+    } catch (error) {
+      console.warn("Lectura directa del portapapeles no disponible, se usa pegado manual.", error);
     }
+  }
+  showPasteFallback();
+}
+
+function showPasteFallback() {
+  elements.pasteFallback.hidden = false;
+  elements.pasteFallbackArea.value = "";
+  elements.pasteFallbackArea.focus();
+  showToast("Mantén pulsado el campo y elige Pegar.");
+}
+
+function handlePasteFallbackInput() {
+  const text = elements.pasteFallbackArea.value;
+  if (!text.trim()) return;
+  try {
     ingestHealthDays(parseHealthPayload(text));
-  } catch (error) {
-    console.error("No se pudo leer el portapapeles", error);
-    showToast("No se pudo leer el portapapeles.");
+    elements.pasteFallback.hidden = true;
+    elements.pasteFallbackArea.value = "";
+  } catch {
+    // El usuario puede seguir escribiendo o corrigiendo; solo se avisa si
+    // parece un intento de JSON ya terminado y sigue sin ser válido.
+    if (/^\s*\{.*\}\s*$/s.test(text)) {
+      showToast("El texto pegado no tiene datos de salud válidos.");
+    }
   }
 }
 
@@ -731,10 +763,11 @@ function ingestHealthDays(days) {
   saveState();
   renderHome();
   const score = state.readiness?.score;
+  const dayLabel = days.length === 1 ? "1 día añadido" : `${days.length} días añadidos`;
   showToast(
     Number.isFinite(score)
-      ? `Readiness ${score}. ${days.length} ${days.length === 1 ? "día" : "días"} añadidos.`
-      : `${days.length} ${days.length === 1 ? "día" : "días"} añadidos. Aún faltan señales.`
+      ? `Readiness ${score}. ${dayLabel}.`
+      : `${dayLabel}. Aún faltan señales.`
   );
 }
 
