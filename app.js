@@ -115,6 +115,7 @@ const elements = {
   healthFileInput: byId("healthFileInput"),
   pasteFallback: byId("pasteFallback"),
   pasteFallbackArea: byId("pasteFallbackArea"),
+  pasteFallbackButton: byId("pasteFallbackButton"),
   readinessFreshness: byId("readinessFreshness"),
   downloadCsvButton: byId("downloadCsvButton"),
   backupHint: byId("backupHint"),
@@ -180,6 +181,7 @@ function bindEvents() {
   elements.pasteHealthButton.addEventListener("click", pasteHealthData);
   elements.healthFileInput.addEventListener("change", importHealthFile);
   elements.pasteFallbackArea.addEventListener("input", handlePasteFallbackInput);
+  elements.pasteFallbackButton.addEventListener("click", () => processPastedHealthText());
   document.querySelectorAll("[data-readiness-field]").forEach((button) => {
     button.addEventListener("click", handleReadinessCheckin);
   });
@@ -729,17 +731,26 @@ function showPasteFallback() {
   showToast("Mantén pulsado el campo y elige Pegar.");
 }
 
+/** Al pegar se intenta procesar en silencio; si no cuela, queda el botón. */
 function handlePasteFallbackInput() {
+  if (!elements.pasteFallbackArea.value.trim()) return;
+  processPastedHealthText({ quiet: true });
+}
+
+function processPastedHealthText({ quiet = false } = {}) {
   const text = elements.pasteFallbackArea.value;
-  if (!text.trim()) return;
+  if (!text.trim()) {
+    if (!quiet) showToast("Pega antes el texto del Atajo.");
+    return;
+  }
   try {
     ingestHealthDays(parseHealthPayload(text));
     elements.pasteFallback.hidden = true;
     elements.pasteFallbackArea.value = "";
-  } catch {
-    // El usuario puede seguir escribiendo o corrigiendo; solo se avisa si
-    // parece un intento de JSON ya terminado y sigue sin ser válido.
-    if (/^\s*\{.*\}\s*$/s.test(text)) {
+  } catch (error) {
+    // En silencio mientras se escribe; con aviso si se pidió procesar a mano.
+    if (!quiet) {
+      console.error("Texto de salud no válido", error);
       showToast("El texto pegado no tiene datos de salud válidos.");
     }
   }

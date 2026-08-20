@@ -298,8 +298,35 @@ function normalizeDateValue(value) {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * Atajos construye el JSON concatenando texto, así que una métrica sin muestras
+ * ese día no deja `null`: deja un hueco. El resultado real observado en el
+ * iPhone es `{"hrv":36,"respiratoryRate":,"wristTemperature":}`, que no es JSON
+ * válido y tumbaba el pegado entero por una señal ausente.
+ *
+ * Se reparan los huecos antes de parsear. No se intenta arreglar cualquier JSON
+ * roto: solo este patrón concreto, que es consecuencia previsible de cómo
+ * Atajos arma el texto.
+ */
+export function repairShortcutJson(text) {
+  return String(text)
+    // "clave": ,   ó   "clave": }   ->   "clave": null
+    .replace(/:\s*(?=[,}\]])/g, ":null")
+    // Coma sobrante antes de cerrar, por si falta el último valor.
+    .replace(/,\s*(?=[}\]])/g, "");
+}
+
 export function parseHealthPayload(raw) {
-  const source = typeof raw === "string" ? JSON.parse(raw) : raw;
+  let source;
+  if (typeof raw === "string") {
+    try {
+      source = JSON.parse(raw);
+    } catch {
+      source = JSON.parse(repairShortcutJson(raw));
+    }
+  } else {
+    source = raw;
+  }
   const list = Array.isArray(source)
     ? source
     : Array.isArray(source?.days)
@@ -313,9 +340,16 @@ export function parseHealthPayload(raw) {
     if (!entry || typeof entry !== "object") continue;
     const day = {};
     for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
+      if (field === "date") {
+        // Basta con que la clave exista: una fecha vacía es la que el Atajo no
+        // supo rellenar, y ahí "hoy" es mejor suposición que tirar el día.
+        const key = aliases.find((alias) => alias in entry);
+        if (key !== undefined) day.date = normalizeDateValue(entry[key]);
+        continue;
+      }
       const key = aliases.find((alias) => entry[alias] !== undefined && entry[alias] !== null && entry[alias] !== "");
       if (key === undefined) continue;
-      day[field] = field === "date" ? normalizeDateValue(entry[key]) : Number(entry[key]);
+      day[field] = Number(entry[key]);
     }
     // Si no hay ninguna clave de fecha reconocible, se descarta: eso sí es un
     // payload ajeno al esquema, no un formato de fecha imperfecto.

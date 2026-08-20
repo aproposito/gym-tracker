@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=17">
+  <link rel="stylesheet" href="styles.css?v=18">
 </head>
 <body>
   <div class="app-shell">
@@ -69,6 +69,7 @@
               <span>Mantén pulsado aquí y elige <strong>Pegar</strong></span>
               <textarea id="pasteFallbackArea" rows="2" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="JSON del Atajo"></textarea>
             </label>
+            <button class="secondary-button full" id="pasteFallbackButton" type="button">Procesar</button>
           </div>
           <p class="readiness-freshness" id="readinessFreshness" hidden></p>
         </section>
@@ -302,6 +303,6 @@
 
   <div class="app-toast" id="appToast" hidden role="status" aria-live="polite"></div>
 
-  <script type="module" src="app.js?v=17"></script>
+  <script type="module" src="app.js?v=18"></script>
 </body>
 </html>
