@@ -2,3 +2,4 @@
 /99_REVISAR_BORRAR/
 .playwright-cli/
 output/
+.claude/

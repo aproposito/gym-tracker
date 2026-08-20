@@ -246,9 +246,15 @@ h3 {
 
 .checkin-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 10px;
   margin: 16px 0 12px;
+}
+
+@media (min-width: 460px) {
+  .checkin-grid {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .choice-fieldset {
@@ -555,15 +561,26 @@ h3 {
 
 .set-row {
   display: grid;
-  grid-template-columns: 40px minmax(66px, 1fr) 112px 48px;
+  grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1fr) 48px;
+  grid-template-areas:
+    "index target target done"
+    "index reps   weight done";
   align-items: center;
-  gap: 7px;
+  gap: 4px 7px;
   min-height: 48px;
 }
 
 .set-row.time-row {
-  grid-template-columns: 40px 1fr 48px;
+  grid-template-areas:
+    "index target target done"
+    "index reps   reps   done";
 }
+
+.set-index { grid-area: index; }
+.set-target { grid-area: target; }
+.reps-input { grid-area: reps; }
+.weight-input { grid-area: weight; }
+.done-button { grid-area: done; }
 
 .set-index {
   display: grid;
@@ -577,10 +594,75 @@ h3 {
 }
 
 .set-target {
+  display: grid;
+  gap: 1px;
   color: var(--muted);
   font-size: 0.84rem;
   font-weight: 700;
-  white-space: nowrap;
+}
+
+.set-target .previous-weight {
+  font-size: 0.72rem;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+/* La entrada de repeticiones comparte forma con la de peso. */
+.reps-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.reps-input input {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  padding: 0 4px 0 10px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-weight: 730;
+  font-variant-numeric: tabular-nums;
+}
+
+.reps-input span {
+  padding-right: 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.reps-input:focus-within {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(38, 115, 95, 0.12);
+}
+
+/* Pista de progresión: una línea, sin diálogos ni interrupciones. */
+.progression-hint {
+  margin: 0 0 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.progression-hint.up {
+  background: rgba(38, 115, 95, 0.1);
+  color: var(--green);
+}
+
+.progression-hint.down {
+  background: rgba(176, 96, 42, 0.1);
+  color: #a4551f;
 }
 
 .weight-input {
@@ -794,6 +876,13 @@ h3 {
   height: 168px;
 }
 
+/* Sin ancho en CSS, el canvas se pinta al tamaño de su búfer y desborda. */
+#volumeChart {
+  display: block;
+  width: 100%;
+  height: 140px;
+}
+
 .history-section {
   margin-top: 18px;
 }
@@ -929,6 +1018,14 @@ h3 {
 
 .three-columns {
   grid-template-columns: 0.75fr 1fr 1fr;
+}
+
+.two-columns {
+  grid-template-columns: 1fr 1fr;
+}
+
+.four-columns {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .edit-exercise .form-grid {
@@ -1136,15 +1233,16 @@ body.session-active .app-toast {
 
 
   .set-row {
-    grid-template-columns: 38px minmax(58px, 1fr) 100px 46px;
-    gap: 5px;
+    grid-template-columns: 38px minmax(0, 1fr) minmax(0, 1fr) 46px;
+    gap: 4px 5px;
   }
 
   .set-index {
     width: 38px;
   }
 
-  .weight-input input {
+  .weight-input input,
+  .reps-input input {
     padding-left: 7px;
   }
 
@@ -1181,4 +1279,79 @@ body.session-active .app-toast {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ── Capa de readiness (opcional) ─────────────────────────────────────────── */
+
+.readiness-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.readiness-freshness {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.file-button.subtle {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.switch-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.switch-row span {
+  display: grid;
+  gap: 2px;
+}
+
+.switch-row small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.switch-row input[type="checkbox"] {
+  width: 48px;
+  height: 28px;
+  margin: 0;
+  accent-color: var(--green);
+  cursor: pointer;
+}
+
+.settings-hint {
+  margin: 0 0 10px;
+  color: #a4551f;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+/* Un score que no es de hoy se atenúa para que no se lea como actual. */
+.readiness-panel.readiness-stale .readiness-score {
+  opacity: 0.55;
+}
+
+.readiness-panel.readiness-stale .readiness-recommendation {
+  font-weight: 700;
+}
+
+/* El check-in ajusta el score de hoy: sin score de hoy, no hay nada que ajustar. */
+.choice-fieldset.disabled {
+  opacity: 0.45;
+}
+
+.choice-fieldset.disabled .segmented-control button {
+  cursor: default;
 }

@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 
 import {
   SCHEMA_VERSION,
-  buildShortcutRunUrl,
   completeWorkoutSession,
   createDefaultState,
   createWorkoutSession,
@@ -16,19 +15,6 @@ import {
   todayKey,
   updateReadinessCheckin
 } from "../domain.js";
-
-test("codifica el nombre del Atajo con espacios y no con signos más", () => {
-  const url = buildShortcutRunUrl(
-    "Calcular Readiness",
-    "https://aproposito.github.io/gym-tracker/"
-  );
-
-  assert.equal(
-    url,
-    "shortcuts://run-shortcut?name=Calcular%20Readiness&input=text&text=https%3A%2F%2Faproposito.github.io%2Fgym-tracker%2F"
-  );
-  assert.equal(url.includes("+"), false);
-});
 
 function idFactory() {
   let index = 0;
@@ -71,9 +57,10 @@ test("migra V1 sin sustituir rutinas personalizadas ni el historial", () => {
   assert.equal(migrated.routines.length, 1);
   assert.equal(migrated.routines[0].name, "Mi rutina");
   assert.equal(migrated.routines[0].exercises[0].measure, "seconds");
-  assert.equal(migrated.routines[0].exercises[0].target, 45);
+  assert.equal(migrated.routines[0].exercises[0].targetMin, 45);
+  assert.equal(migrated.routines[0].exercises[0].targetMax, 60);
   assert.equal(migrated.history.length, 1);
-  assert.equal(migrated.history[0].exercises[0].sets[0].target, 40);
+  assert.equal(migrated.history[0].exercises[0].sets[0].targetMin, 40);
   assert.equal(migrated.activeSession, null);
 });
 
@@ -198,6 +185,69 @@ test("readiness exige dos métricas y aplica las correcciones locales", () => {
 
   readiness = updateReadinessCheckin(readiness, "energy", "low");
   readiness = updateReadinessCheckin(readiness, "soreness", "high");
-  assert.equal(readiness.score, 47);
+  assert.equal(readiness.score, 59);
   assert.equal(readiness.band, "amber");
+});
+
+test("migra V2 a V3 conservando rutinas, historial y ajustes", () => {
+  const v2 = {
+    schemaVersion: 2,
+    routines: [{
+      id: "custom",
+      name: "Mi rutina",
+      exercises: [{ id: "press", name: "Press banca", setCount: 3, target: 8, measure: "reps", defaultWeight: "40" }]
+    }],
+    activeSession: null,
+    history: [{
+      id: "s1",
+      routineId: "custom",
+      routineName: "Mi rutina",
+      completedAt: "2026-08-01T10:00:00.000Z",
+      exercises: [{
+        templateExerciseId: "press",
+        name: "Press banca",
+        measure: "reps",
+        sets: [{ target: 8, weight: "40", done: true }]
+      }]
+    }],
+    readiness: { date: "2026-08-01", objectiveScore: 80, availableMetrics: 3 },
+    settings: { restSeconds: 120, selectedRoutineId: "custom", shortcutName: "Calcular Readiness" }
+  };
+
+  const migrated = normalizeState(v2);
+
+  assert.equal(migrated.schemaVersion, 3);
+  assert.equal(migrated.routines[0].name, "Mi rutina");
+  assert.equal(migrated.routines[0].exercises[0].targetMin, 8);
+  assert.equal(migrated.routines[0].exercises[0].targetMax, 11);
+  assert.equal(migrated.routines[0].exercises[0].defaultWeight, "40");
+  assert.equal(migrated.history.length, 1);
+  assert.equal(migrated.settings.restSeconds, 120);
+  assert.equal(migrated.settings.selectedRoutineId, "custom");
+  assert.equal(migrated.settings.shortcutName, undefined);
+  // La capa de readiness no se hereda encendida: se activa a propósito.
+  assert.equal(migrated.settings.readinessEnabled, false);
+  assert.deepEqual(migrated.healthDays, []);
+});
+
+test("el historial migrado no inventa repeticiones", () => {
+  const v2 = {
+    schemaVersion: 2,
+    routines: [{
+      id: "r",
+      name: "R",
+      exercises: [{ id: "press", name: "Press", setCount: 1, target: 8, measure: "reps" }]
+    }],
+    history: [{
+      id: "s1",
+      routineId: "r",
+      routineName: "R",
+      completedAt: "2026-08-01T10:00:00.000Z",
+      exercises: [{ templateExerciseId: "press", name: "Press", measure: "reps", sets: [{ target: 8, weight: "40", done: true }] }]
+    }],
+    settings: { restSeconds: 90, selectedRoutineId: "r" }
+  };
+
+  const migrated = normalizeState(v2);
+  assert.equal(migrated.history[0].exercises[0].sets[0].reps, null);
 });

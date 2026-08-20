@@ -1,17 +1,24 @@
-export const STORAGE_KEY = "gymTracker.v2";
-export const LEGACY_STORAGE_KEY = "gymTracker.v1";
-export const SCHEMA_VERSION = 2;
+export const STORAGE_KEY = "gymTracker.v3";
+export const LEGACY_STORAGE_KEYS = ["gymTracker.v2", "gymTracker.v1"];
+export const SCHEMA_VERSION = 3;
 
+// El ajuste subjetivo se mantiene comparable a la dispersión objetiva del score
+// (sd ~9 puntos en el histórico). Antes movía ±25 y decidía por sí solo.
 const READINESS_ADJUSTMENTS = {
-  energy: { low: -10, normal: 0, high: 5 },
-  soreness: { low: 0, medium: -5, high: -15 }
+  energy: { low: -6, normal: 0, high: 3 },
+  soreness: { low: 0, medium: -3, high: -7 }
 };
 
-export function buildShortcutRunUrl(shortcutName, inputText) {
-  const name = String(shortcutName || "").trim() || "Calcular Readiness";
-  const text = String(inputText || "");
-  return `shortcuts://run-shortcut?name=${encodeURIComponent(name)}&input=text&text=${encodeURIComponent(text)}`;
-}
+export const READINESS_BANDS = { green: 70, amber: 52 };
+
+// Doble progresión: el peso solo sube tras dos sesiones consecutivas completando
+// el tope del rango en todas las series. Con la rotación de rutinas eso espacia
+// las subidas a dos o tres semanas.
+export const SESSIONS_AT_TOP_TO_INCREASE = 2;
+export const SESSIONS_BELOW_TO_DELOAD = 2;
+export const MAX_INCREASE_RATIO = 0.05;
+export const DELOAD_RATIO = 0.1;
+export const STALE_SESSIONS = 3;
 
 export function createDefaultState() {
   return {
@@ -20,10 +27,11 @@ export function createDefaultState() {
     activeSession: null,
     history: [],
     readiness: emptyReadiness(),
+    healthDays: [],
     settings: {
       restSeconds: 90,
       selectedRoutineId: "routine-a",
-      shortcutName: "Calcular Readiness"
+      readinessEnabled: false
     }
   };
 }
@@ -34,7 +42,7 @@ export function normalizeState(value) {
   }
 
   if (value.schemaVersion !== SCHEMA_VERSION || !value.settings) {
-    return migrateLegacyState(value);
+    return migrateState(value);
   }
 
   const fallback = createDefaultState();
@@ -47,8 +55,10 @@ export function normalizeState(value) {
   const settings = {
     ...fallback.settings,
     ...value.settings,
-    restSeconds: clampInteger(value.settings?.restSeconds, 10, 600, 90)
+    restSeconds: clampInteger(value.settings?.restSeconds, 10, 600, 90),
+    readinessEnabled: Boolean(value.settings?.readinessEnabled)
   };
+  delete settings.shortcutName;
 
   if (!routines.some((routine) => routine.id === settings.selectedRoutineId)) {
     settings.selectedRoutineId = getSuggestedRoutineId({ routines, history });
@@ -60,6 +70,48 @@ export function normalizeState(value) {
     activeSession: value.activeSession ? normalizeActiveSession(value.activeSession, settings.restSeconds) : null,
     history,
     readiness: normalizeStoredReadiness(value.readiness),
+    healthDays: normalizeHealthDays(value.healthDays),
+    settings
+  };
+}
+
+export function migrateState(value) {
+  if (value.schemaVersion === 2 && value.settings) {
+    return migrateV2ToV3(value);
+  }
+  return migrateLegacyState(value);
+}
+
+// V2 -> V3: los ejercicios ganan rango de repeticiones y la capa de readiness
+// pasa a estar apagada. Rutinas, historial y ajustes se conservan intactos.
+export function migrateV2ToV3(previous) {
+  const routines = (Array.isArray(previous.routines) ? previous.routines : []).map(normalizeRoutine);
+  const history = (Array.isArray(previous.history) ? previous.history : [])
+    .map(normalizeHistorySession)
+    .filter(Boolean);
+  const fallback = createDefaultState();
+  const settings = {
+    restSeconds: clampInteger(previous.settings?.restSeconds, 10, 600, 90),
+    selectedRoutineId: previous.settings?.selectedRoutineId || "",
+    // La capa de readiness arranca apagada aunque antes hubiera un score guardado:
+    // se activa a propósito, nunca por herencia.
+    readinessEnabled: false
+  };
+
+  const finalRoutines = routines.length ? routines : fallback.routines;
+  if (!finalRoutines.some((routine) => routine.id === settings.selectedRoutineId)) {
+    settings.selectedRoutineId = getSuggestedRoutineId({ routines: finalRoutines, history });
+  }
+
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    routines: finalRoutines,
+    activeSession: previous.activeSession
+      ? normalizeActiveSession(previous.activeSession, settings.restSeconds)
+      : null,
+    history,
+    readiness: normalizeStoredReadiness(previous.readiness),
+    healthDays: [],
     settings
   };
 }
@@ -81,7 +133,7 @@ export function migrateLegacyState(legacy) {
   const settings = {
     restSeconds: clampInteger(legacy.restSeconds, 10, 600, 90),
     selectedRoutineId,
-    shortcutName: "Calcular Readiness"
+    readinessEnabled: false
   };
   const activeLegacyRoutine = sourceRoutines.find((routine) => routine.id === selectedRoutineId);
   const hasProgress = activeLegacyRoutine?.exercises?.some((exercise) =>
@@ -96,6 +148,7 @@ export function migrateLegacyState(legacy) {
       : null,
     history,
     readiness: emptyReadiness(),
+    healthDays: [],
     settings
   };
 }
@@ -109,24 +162,32 @@ export function createWorkoutSession(state, routineId, options = {}) {
   const now = options.now || new Date().toISOString();
   const idFactory = options.idFactory || createId;
   const previousSession = getLastRoutineSession(state.history, routine.id);
+  const readinessBand = state.settings?.readinessEnabled ? readinessBandForToday(state.readiness) : null;
+
   const exercises = routine.exercises.map((exercise) => {
     const previousExercise = findSessionExercise(previousSession, exercise);
-    const previousCompleted = previousExercise?.sets?.filter((set) => set.done) || [];
+    const progression = getExerciseProgression(state.history, exercise, { readinessBand });
 
     return {
       id: idFactory(),
       templateExerciseId: exercise.id,
       name: exercise.name,
       measure: exercise.measure,
+      progression,
       sets: Array.from({ length: exercise.setCount }, (_, setIndex) => {
-        const previousSet = previousExercise?.sets?.[setIndex] || previousCompleted[setIndex];
+        const previousSet = previousExercise?.sets?.[setIndex];
         const previousWeight = cleanWeight(previousSet?.weight);
+        const previousReps = toPositiveInteger(previousSet?.reps);
         return {
-          target: exercise.target,
+          targetMin: exercise.targetMin,
+          targetMax: exercise.targetMax,
+          target: exercise.targetMax,
           weight: exercise.measure === "reps"
-            ? previousWeight || cleanWeight(exercise.defaultWeight)
+            ? progression.suggestedWeight || previousWeight || cleanWeight(exercise.defaultWeight)
             : "",
           previousWeight,
+          previousReps,
+          reps: progression.suggestedReps,
           done: false,
           completedAt: null
         };
@@ -141,7 +202,7 @@ export function createWorkoutSession(state, routineId, options = {}) {
       routineId: routine.id,
       routineName: routine.name,
       startedAt: now,
-      readiness: readinessSnapshot(state.readiness),
+      readiness: state.settings?.readinessEnabled ? readinessSnapshot(state.readiness) : null,
       exercises,
       restTimer: {
         duration: state.settings.restSeconds,
@@ -186,6 +247,201 @@ export function discardWorkoutSession(state) {
     activeSession: null
   };
 }
+
+// ─── Progresión ──────────────────────────────────────────────────────────────
+
+export function defaultIncrement(exercise) {
+  if (exercise?.measure === "seconds") return 5;
+  const name = normalizeName(exercise?.name);
+  // Movimientos de tren inferior y máquinas grandes admiten el salto de disco;
+  // el tren superior progresa en incrementos más pequeños.
+  return /prensa|sentadilla|squat|hip thrust|femoral|gemelo|peso muerto|leg press/.test(name) ? 2.5 : 1.25;
+}
+
+export function getSessionVolume(session) {
+  let volume = 0;
+  for (const exercise of session?.exercises || []) {
+    if (exercise.measure === "seconds") continue;
+    for (const set of exercise.sets || []) {
+      if (!set.done) continue;
+      const weight = Number(set.weight);
+      const reps = toPositiveInteger(set.reps);
+      if (Number.isFinite(weight) && weight > 0 && reps) volume += weight * reps;
+    }
+  }
+  return Math.round(volume);
+}
+
+/**
+ * Decide qué hacer con la carga del próximo ejercicio a partir del historial.
+ * Devuelve datos, no texto de interfaz: la app decide cómo redactarlo.
+ */
+export function getExerciseProgression(history, exercise, options = {}) {
+  const template = normalizeTemplateExercise(exercise);
+  const key = template.id;
+  const sessions = sessionsForExercise(history, template);
+  const measure = template.measure;
+  const latest = sessions.at(-1) || null;
+  const latestWeight = latest ? cleanWeight(heaviestCompletedWeight(latest)) : "";
+  const currentWeight = latestWeight || cleanWeight(template.defaultWeight);
+
+  const base = {
+    exerciseKey: key,
+    repRange: { min: template.targetMin, max: template.targetMax },
+    measure,
+    currentWeight,
+    suggestedWeight: currentWeight,
+    suggestedReps: template.targetMin,
+    action: "hold",
+    reason: "sin-historial",
+    sessionsAtTop: 0,
+    sessionsBelowMin: 0,
+    stale: false,
+    blockedByReadiness: false
+  };
+
+  if (!sessions.length) return base;
+
+  const outcomes = sessions.map((entry) => sessionOutcome(entry, template));
+  const sessionsAtTop = trailingCount(outcomes, (outcome) => outcome === "top");
+  const sessionsBelowMin = trailingCount(outcomes, (outcome) => outcome === "below");
+  const lastReps = latest ? bestCompletedReps(latest, measure) : null;
+
+  base.sessionsAtTop = sessionsAtTop;
+  base.sessionsBelowMin = sessionsBelowMin;
+  base.suggestedReps = clampInteger(
+    lastReps ? Math.min(lastReps + 1, template.targetMax) : template.targetMin,
+    template.targetMin,
+    template.targetMax,
+    template.targetMin
+  );
+  base.stale = isStale(sessions, template);
+
+  if (sessionsBelowMin >= SESSIONS_BELOW_TO_DELOAD) {
+    base.action = "deload";
+    base.reason = "por-debajo-del-rango";
+    base.suggestedReps = template.targetMin;
+    if (measure === "reps") {
+      base.suggestedWeight = roundToLoadableWeight(Number(currentWeight) * (1 - DELOAD_RATIO));
+    }
+    return base;
+  }
+
+  if (sessionsAtTop >= SESSIONS_AT_TOP_TO_INCREASE) {
+    if (options.readinessBand === "red") {
+      base.action = "hold";
+      base.reason = "readiness-rojo";
+      base.blockedByReadiness = true;
+      base.suggestedReps = template.targetMax;
+      return base;
+    }
+    base.action = "increase";
+    base.reason = "rango-completado";
+    // Al subir se vuelve al mínimo del rango y se reconstruyen repeticiones.
+    base.suggestedReps = template.targetMin;
+    base.suggestedWeight = measure === "reps"
+      ? increasedWeight(currentWeight, template)
+      : currentWeight;
+    if (measure === "seconds") {
+      base.repRange = {
+        min: template.targetMin + template.increment,
+        max: template.targetMax + template.increment
+      };
+      base.suggestedReps = base.repRange.min;
+    }
+    return base;
+  }
+
+  base.action = "hold";
+  base.reason = sessionsAtTop === 1 ? "una-sesion-al-tope" : "progresando-en-repeticiones";
+  return base;
+}
+
+function increasedWeight(currentWeight, template) {
+  const current = Number(currentWeight);
+  if (!Number.isFinite(current) || current <= 0) return currentWeight;
+  // Nunca más de un 5 % de golpe, por muy grande que sea el incremento nominal.
+  const step = Math.min(template.increment, current * MAX_INCREASE_RATIO);
+  return roundToLoadableWeight(current + Math.max(step, 0));
+}
+
+function sessionsForExercise(history, template) {
+  return [...(history || [])]
+    .sort((a, b) => sessionTime(a) - sessionTime(b))
+    .map((session) => {
+      const exercise = (session.exercises || []).find((item) =>
+        item.templateExerciseId === template.id || normalizeName(item.name) === normalizeName(template.name)
+      );
+      return exercise ? { session, exercise } : null;
+    })
+    .filter(Boolean)
+    .filter(({ exercise }) => (exercise.sets || []).some((set) => set.done));
+}
+
+/**
+ * "top"     todas las series completadas llegaron al tope del rango
+ * "below"   alguna serie completada se quedó por debajo del mínimo
+ * "inside"  dentro del rango, o repeticiones desconocidas
+ */
+function sessionOutcome({ exercise }, template) {
+  const done = (exercise.sets || []).filter((set) => set.done);
+  if (!done.length) return "inside";
+
+  const values = done.map((set) => repsForSet(set, exercise.measure || template.measure));
+  // El historial migrado desde V2 no registró repeticiones: no se puede afirmar
+  // que se completara el rango, así que no cuenta para subir peso.
+  if (values.some((value) => value === null)) return "inside";
+  if (done.length < template.setCount) return "inside";
+
+  if (values.every((value) => value >= template.targetMax)) return "top";
+  if (values.some((value) => value < template.targetMin)) return "below";
+  return "inside";
+}
+
+function repsForSet(set, measure) {
+  const reps = toPositiveInteger(set.reps);
+  if (reps) return reps;
+  if (measure === "seconds") return toPositiveInteger(set.target) || null;
+  return null;
+}
+
+function bestCompletedReps(entry, measure) {
+  const values = (entry.exercise.sets || [])
+    .filter((set) => set.done)
+    .map((set) => repsForSet(set, measure))
+    .filter((value) => value !== null);
+  return values.length ? Math.min(...values) : null;
+}
+
+function heaviestCompletedWeight(entry) {
+  const values = (entry.exercise.sets || [])
+    .filter((set) => set.done)
+    .map((set) => Number(set.weight))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  return values.length ? Math.max(...values) : "";
+}
+
+function trailingCount(outcomes, predicate) {
+  let count = 0;
+  for (let index = outcomes.length - 1; index >= 0; index -= 1) {
+    if (!predicate(outcomes[index])) break;
+    count += 1;
+  }
+  return count;
+}
+
+function isStale(sessions, template) {
+  const recent = sessions.slice(-STALE_SESSIONS);
+  if (recent.length < STALE_SESSIONS) return false;
+  const signatures = recent.map((entry) => {
+    const weight = heaviestCompletedWeight(entry);
+    const reps = bestCompletedReps(entry, template.measure);
+    return `${weight}|${reps}`;
+  });
+  return signatures.every((signature) => signature === signatures[0]);
+}
+
+// ─── Consultas ───────────────────────────────────────────────────────────────
 
 export function getSuggestedRoutineId(state) {
   const routines = state.routines || [];
@@ -234,7 +490,7 @@ export function getPersonalRecords(history) {
       for (const set of exercise.sets || []) {
         if (!set.done) continue;
         const value = exercise.measure === "seconds"
-          ? Number(set.target)
+          ? Number(repsForSet(set, "seconds"))
           : Number(set.weight);
         if (!Number.isFinite(value) || value <= 0) continue;
 
@@ -246,7 +502,7 @@ export function getPersonalRecords(history) {
             name: exercise.name,
             measure: exercise.measure || "reps",
             value,
-            target: Number(set.target) || 0,
+            target: toPositiveInteger(set.reps) || Number(set.target) || 0,
             date: session.completedAt || session.date || session.startedAt,
             session
           });
@@ -269,7 +525,7 @@ export function getExerciseProgress(history, exerciseKey) {
 
     const values = exercise.sets
       .filter((set) => set.done)
-      .map((set) => exercise.measure === "seconds" ? Number(set.target) : Number(set.weight))
+      .map((set) => exercise.measure === "seconds" ? Number(repsForSet(set, "seconds")) : Number(set.weight))
       .filter((value) => Number.isFinite(value) && value > 0);
     if (!values.length) continue;
 
@@ -284,32 +540,22 @@ export function getExerciseProgress(history, exerciseKey) {
   return points;
 }
 
-export function normalizeReadinessPayload(payload, previous = emptyReadiness()) {
-  if (!payload || typeof payload !== "object") {
-    throw new Error("El resultado de readiness no es válido.");
+export function getWeeklyVolume(history, weeks = 12) {
+  const buckets = new Map();
+  for (const session of history || []) {
+    const time = sessionTime(session);
+    if (!time) continue;
+    const key = weekKey(new Date(time));
+    const bucket = buckets.get(key) || { week: key, volume: 0, sessions: 0, sets: 0 };
+    bucket.volume += getSessionVolume(session);
+    bucket.sessions += 1;
+    bucket.sets += getSessionTotals(session).done;
+    buckets.set(key, bucket);
   }
-
-  const availableMetrics = clampInteger(payload.availableMetrics ?? payload.metrics, 0, 3, 0);
-  const objectiveScore = availableMetrics >= 2
-    ? clampInteger(payload.objectiveScore ?? payload.score, 0, 100, 0)
-    : null;
-  const date = isDateKey(payload.date) ? payload.date : todayKey();
-  const sameDay = previous?.date === date;
-  const next = {
-    date,
-    objectiveScore,
-    availableMetrics,
-    confidence: availableMetrics === 3 ? "alta" : availableMetrics === 2 ? "media" : "insuficiente",
-    factors: Array.isArray(payload.factors)
-      ? payload.factors.slice(0, 3).map((factor) => String(factor).slice(0, 120))
-      : [],
-    energy: sameDay ? previous.energy || null : null,
-    soreness: sameDay ? previous.soreness || null : null,
-    updatedAt: new Date().toISOString()
-  };
-
-  return applyReadinessAdjustments(next);
+  return [...buckets.values()].sort((a, b) => a.week.localeCompare(b.week)).slice(-weeks);
 }
+
+// ─── Readiness (la capa es opcional: sin datos, todo devuelve "sin calcular") ──
 
 export function updateReadinessCheckin(readiness, field, value) {
   if (!READINESS_ADJUSTMENTS[field] || !(value in READINESS_ADJUSTMENTS[field])) {
@@ -333,7 +579,7 @@ export function applyReadinessAdjustments(readiness) {
   const energyAdjustment = READINESS_ADJUSTMENTS.energy[readiness.energy] || 0;
   const sorenessAdjustment = READINESS_ADJUSTMENTS.soreness[readiness.soreness] || 0;
   const score = clampInteger(objective + energyAdjustment + sorenessAdjustment, 0, 100, objective);
-  const band = score >= 70 ? "green" : score >= 45 ? "amber" : "red";
+  const band = bandForScore(score);
   const recommendation = band === "green"
     ? "Sesión prevista"
     : band === "amber"
@@ -341,6 +587,45 @@ export function applyReadinessAdjustments(readiness) {
       : "Prioriza una sesión suave";
 
   return { ...readiness, score, band, recommendation };
+}
+
+/**
+ * Frontera entre el motor de readiness y el estado guardado. Recibe el
+ * resultado de `computeDailyReadiness` y conserva el check-in del mismo día.
+ */
+export function normalizeReadinessPayload(payload, previous = emptyReadiness()) {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("El resultado de readiness no es válido.");
+  }
+
+  const availableMetrics = clampInteger(payload.availableMetrics ?? payload.metrics, 0, 8, 0);
+  const numericScore = Number(payload.objectiveScore ?? payload.score);
+  const objectiveScore = availableMetrics >= 2 && Number.isFinite(numericScore)
+    ? clampInteger(numericScore, 0, 100, 0)
+    : null;
+  const date = isDateKey(payload.date) ? payload.date : todayKey();
+  const sameDay = previous?.date === date;
+
+  return applyReadinessAdjustments({
+    date,
+    objectiveScore,
+    availableMetrics,
+    confidence: payload.confidence
+      || (availableMetrics >= 4 ? "alta" : availableMetrics >= 3 ? "media" : "insuficiente"),
+    factors: Array.isArray(payload.factors)
+      ? payload.factors.slice(0, 3).map((factor) => String(factor).slice(0, 120))
+      : [],
+    energy: sameDay ? previous.energy || null : null,
+    soreness: sameDay ? previous.soreness || null : null,
+    updatedAt: new Date().toISOString()
+  });
+}
+
+export function bandForScore(score) {
+  if (!Number.isFinite(score)) return "unknown";
+  if (score >= READINESS_BANDS.green) return "green";
+  if (score >= READINESS_BANDS.amber) return "amber";
+  return "red";
 }
 
 export function emptyReadiness() {
@@ -358,6 +643,13 @@ export function emptyReadiness() {
     updatedAt: null
   };
 }
+
+function readinessBandForToday(readiness) {
+  if (!readiness?.date || readiness.date !== todayKey()) return null;
+  return Number.isFinite(readiness.score) ? readiness.band : null;
+}
+
+// ─── Plantillas ──────────────────────────────────────────────────────────────
 
 export function buildDefaultRoutines() {
   return [
@@ -395,8 +687,14 @@ export function buildDefaultRoutines() {
   ];
 }
 
+export function defaultRangeSpan(measure) {
+  return measure === "seconds" ? 15 : 3;
+}
+
 function templateExercise(id, name, setCount, target, measure = "reps") {
-  return { id, name, setCount, target, measure, defaultWeight: "" };
+  const span = defaultRangeSpan(measure);
+  const draft = { id, name, setCount, targetMin: target, targetMax: target + span, measure, defaultWeight: "" };
+  return { ...draft, increment: defaultIncrement(draft) };
 }
 
 function normalizeRoutine(routine, index = 0) {
@@ -412,18 +710,32 @@ function normalizeRoutine(routine, index = 0) {
 function normalizeTemplateExercise(exercise, index = 0) {
   const legacySets = Array.isArray(exercise.sets) ? exercise.sets : [];
   const legacyTarget = legacySets[0]?.reps ?? legacySets[0]?.target;
-  const parsed = parseTarget(exercise.target ?? legacyTarget ?? 10, exercise.measure);
+  const parsed = parseTarget(exercise.targetMin ?? exercise.target ?? legacyTarget ?? 10, exercise.measure);
+  const measure = parsed.measure;
+  const span = defaultRangeSpan(measure);
+  const targetMin = clampInteger(parsed.target, 1, 999, 10);
+  const targetMax = clampInteger(
+    exercise.targetMax ?? targetMin + span,
+    targetMin,
+    999,
+    targetMin + span
+  );
   const defaultWeight = cleanWeight(
     exercise.defaultWeight ?? legacySets.find((set) => cleanWeight(set.weight))?.weight
   );
-
-  return {
+  const draft = {
     id: exercise.id || `exercise-${index + 1}-${createId()}`,
     name: String(exercise.name || "Ejercicio sin nombre").trim(),
     setCount: clampInteger(exercise.setCount ?? legacySets.length, 1, 12, 3),
-    target: clampInteger(parsed.target, 1, 999, 10),
-    measure: parsed.measure,
+    targetMin,
+    targetMax,
+    measure,
     defaultWeight
+  };
+  const increment = Number(exercise.increment);
+  return {
+    ...draft,
+    increment: Number.isFinite(increment) && increment > 0 ? increment : defaultIncrement(draft)
   };
 }
 
@@ -456,18 +768,36 @@ function normalizeActiveSession(session, restSeconds) {
 
 function normalizeSessionExercise(exercise, index = 0) {
   const sourceSets = Array.isArray(exercise.sets) ? exercise.sets : [];
-  const parsed = parseTarget(sourceSets[0]?.target ?? sourceSets[0]?.reps ?? exercise.target ?? 10, exercise.measure);
+  const parsed = parseTarget(
+    sourceSets[0]?.targetMin ?? sourceSets[0]?.target ?? sourceSets[0]?.reps ?? exercise.target ?? 10,
+    exercise.measure
+  );
+  const measure = exercise.measure || parsed.measure;
+  const span = defaultRangeSpan(measure);
   return {
     id: exercise.id || `session-exercise-${index + 1}-${createId()}`,
     templateExerciseId: exercise.templateExerciseId || exercise.id || "",
     name: String(exercise.name || "Ejercicio sin nombre").trim(),
-    measure: exercise.measure || parsed.measure,
+    measure,
+    progression: exercise.progression || null,
     sets: sourceSets.map((set) => {
-      const target = parseTarget(set.target ?? set.reps ?? parsed.target, exercise.measure || parsed.measure);
+      const min = clampInteger(
+        set.targetMin ?? set.target ?? set.reps ?? parsed.target,
+        1,
+        999,
+        parsed.target
+      );
+      const max = clampInteger(set.targetMax ?? set.target ?? min + span, min, 999, min + span);
       return {
-        target: clampInteger(target.target, 1, 999, parsed.target),
+        targetMin: min,
+        targetMax: max,
+        target: max,
         weight: cleanWeight(set.weight),
         previousWeight: cleanWeight(set.previousWeight),
+        previousReps: toPositiveInteger(set.previousReps),
+        // El historial anterior a V3 no guardó repeticiones reales. Se deja en
+        // null a propósito: preferimos no progresar antes que inventar datos.
+        reps: toPositiveInteger(set.reps),
         done: Boolean(set.done),
         completedAt: set.completedAt || null
       };
@@ -510,9 +840,49 @@ function normalizeStoredReadiness(readiness) {
     ...emptyReadiness(),
     ...readiness,
     objectiveScore: readiness.objectiveScore !== null && readiness.objectiveScore !== "" && Number.isFinite(Number(readiness.objectiveScore)) ? Number(readiness.objectiveScore) : null,
-    availableMetrics: clampInteger(readiness.availableMetrics, 0, 3, 0),
-    factors: Array.isArray(readiness.factors) ? readiness.factors.slice(0, 3).map(String) : []
+    availableMetrics: clampInteger(readiness.availableMetrics, 0, 8, 0),
+    factors: Array.isArray(readiness.factors) ? readiness.factors.slice(0, 4).map(String) : []
   });
+}
+
+export function normalizeHealthDays(value, limit = 120) {
+  if (!Array.isArray(value)) return [];
+  const byDate = new Map();
+  for (const entry of value) {
+    if (!entry || !isDateKey(entry.date)) continue;
+    byDate.set(entry.date, normalizeHealthDay(entry));
+  }
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)).slice(-limit);
+}
+
+export const HEALTH_METRICS = [
+  "hrv",
+  "restingHeartRate",
+  "sleepHours",
+  "sleepEfficiency",
+  "respiratoryRate",
+  "wristTemperature",
+  "oxygenSaturation"
+];
+
+function normalizeHealthDay(entry) {
+  const day = { date: entry.date };
+  for (const metric of HEALTH_METRICS) {
+    day[metric] = toMetricValue(entry[metric]);
+  }
+  day.sleepSegments = toMetricValue(entry.sleepSegments);
+  return day;
+}
+
+/**
+ * Una métrica ausente es null, nunca cero. `Number(null)` da 0, y un cero
+ * entra en la línea base de 60 días como si fuera una medición real: bastan
+ * unos pocos para hundir la mediana y descolocar todos los scores siguientes.
+ */
+function toMetricValue(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
 }
 
 function readinessSnapshot(readiness) {
@@ -541,8 +911,30 @@ function cleanWeight(value) {
   return Number.isFinite(numeric) && numeric >= 0 ? String(numeric) : "";
 }
 
+function toPositiveInteger(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? Math.round(numeric) : null;
+}
+
+/**
+ * Redondea a 0,25 kg. Media unidad partiría los incrementos de 1,25 kg, que son
+ * el par de discos pequeño estándar y el paso mínimo realista del tren superior.
+ */
+function roundToLoadableWeight(value) {
+  return String(Math.round(value * 4) / 4);
+}
+
 function sessionTime(session) {
   return Date.parse(session?.completedAt || session?.date || session?.startedAt || 0) || 0;
+}
+
+function weekKey(date) {
+  const copy = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = copy.getUTCDay() || 7;
+  copy.setUTCDate(copy.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(copy.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((copy - yearStart) / 86400000 + 1) / 7);
+  return `${copy.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
 function isDateKey(value) {
