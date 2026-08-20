@@ -1298,6 +1298,40 @@ body.session-active .app-toast {
   font-weight: 650;
 }
 
+.paste-fallback {
+  margin-top: 10px;
+}
+
+.paste-fallback label {
+  display: grid;
+  gap: 6px;
+}
+
+.paste-fallback span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.paste-fallback textarea {
+  width: 100%;
+  min-height: 52px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.paste-fallback textarea:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(38, 115, 95, 0.12);
+}
+
 .file-button.subtle {
   background: transparent;
   border: 1px solid var(--line);
