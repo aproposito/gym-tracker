@@ -7,6 +7,7 @@ import {
   mergeHealthDays,
   metricSubscore,
   parseHealthPayload,
+  repairShortcutJson,
   robustBaseline,
   sanitizeHealthDay
 } from "../readiness.js";
@@ -257,4 +258,38 @@ test("una fecha ilegible se trata como hoy, no como día inválido", () => {
 
 test("sin ninguna clave de fecha reconocible, sí se rechaza", () => {
   assert.throws(() => parseHealthPayload('{"days":[{"hrv":30}]}'), /fecha válida/);
+});
+
+test("repara el JSON con huecos que produce Atajos", () => {
+  // Texto exacto observado en el iPhone: respiración y temperatura sin muestras
+  // ese día dejan el valor vacío, lo que rompe el JSON entero.
+  const delAtajo = '{"date":"","hrv":36,"restingHeartRate":55,"oxygenSaturation":87,"respiratoryRate":,"wristTemperature":}';
+
+  assert.throws(() => JSON.parse(delAtajo), SyntaxError);
+
+  const [day] = parseHealthPayload(delAtajo);
+  assert.equal(day.hrv, 36);
+  assert.equal(day.restingHeartRate, 55);
+  assert.equal(day.oxygenSaturation, 87);
+  // Las señales ausentes se descartan, no se inventan.
+  assert.ok(!("respiratoryRate" in day));
+  assert.ok(!("wristTemperature" in day));
+  // Fecha vacía: se asume hoy, que es cuando se ejecuta el Atajo.
+  assert.equal(day.date, new Date().toISOString().slice(0, 10));
+});
+
+test("un solo hueco no descarta el resto de señales", () => {
+  const [day] = parseHealthPayload('{"date":"2026-08-20","hrv":30,"restingHeartRate":}');
+  assert.equal(day.hrv, 30);
+  assert.ok(!("restingHeartRate" in day));
+});
+
+test("la reparación no toca un JSON que ya es válido", () => {
+  const valido = '{"date":"2026-08-20","hrv":30,"restingHeartRate":55}';
+  assert.equal(repairShortcutJson(valido), valido);
+});
+
+test("un texto que no es JSON en absoluto sigue fallando", () => {
+  // La reparación es para huecos de Atajos, no un intento de arreglar cualquier cosa.
+  assert.throws(() => parseHealthPayload("hola qué tal"));
 });
