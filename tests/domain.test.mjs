@@ -218,8 +218,9 @@ test("migra V2 a V3 conservando rutinas, historial y ajustes", () => {
 
   assert.equal(migrated.schemaVersion, 3);
   assert.equal(migrated.routines[0].name, "Mi rutina");
+  assert.equal(migrated.routines[0].exercises[0].style, "volumen");
   assert.equal(migrated.routines[0].exercises[0].targetMin, 8);
-  assert.equal(migrated.routines[0].exercises[0].targetMax, 11);
+  assert.equal(migrated.routines[0].exercises[0].targetMax, 10);
   assert.equal(migrated.routines[0].exercises[0].defaultWeight, "40");
   assert.equal(migrated.history.length, 1);
   assert.equal(migrated.settings.restSeconds, 120);

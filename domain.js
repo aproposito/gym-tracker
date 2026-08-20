@@ -11,10 +11,24 @@ const READINESS_ADJUSTMENTS = {
 
 export const READINESS_BANDS = { green: 70, amber: 52 };
 
-// Doble progresión: el peso solo sube tras dos sesiones consecutivas completando
-// el tope del rango en todas las series. Con la rotación de rutinas eso espacia
-// las subidas a dos o tres semanas.
-export const SESSIONS_AT_TOP_TO_INCREASE = 2;
+/**
+ * Dos formas de entrenar, dos formas de progresar.
+ *
+ * TRICON: nueve repeticiones fijas (tres normales, tres isométricas de seis
+ * segundos y tres excéntricas lentas). No se progresa en repeticiones porque el
+ * formato es el que es; solo sube el peso, y más despacio que en volumen porque
+ * el tiempo bajo tensión ya es muy alto.
+ *
+ * Volumen: se sube de 10 a 12 repeticiones con el mismo peso y solo después
+ * aumenta la carga.
+ */
+export const EXERCISE_STYLES = {
+  tricon: { reps: 9, fixedReps: true, sessionsToIncrease: 3 },
+  volumen: { repsMin: 10, repsMax: 12, fixedReps: false, sessionsToIncrease: 2 }
+};
+
+export const TRICON_REPS = EXERCISE_STYLES.tricon.reps;
+export const SESSIONS_AT_TOP_TO_INCREASE = EXERCISE_STYLES.volumen.sessionsToIncrease;
 export const SESSIONS_BELOW_TO_DELOAD = 2;
 export const MAX_INCREASE_RATIO = 0.05;
 export const DELOAD_RATIO = 0.1;
@@ -279,6 +293,8 @@ export function getSessionVolume(session) {
 export function getExerciseProgression(history, exercise, options = {}) {
   const template = normalizeTemplateExercise(exercise);
   const key = template.id;
+  const style = template.style;
+  const sessionsToIncrease = EXERCISE_STYLES[style].sessionsToIncrease;
   const sessions = sessionsForExercise(history, template);
   const measure = template.measure;
   const latest = sessions.at(-1) || null;
@@ -287,6 +303,8 @@ export function getExerciseProgression(history, exercise, options = {}) {
 
   const base = {
     exerciseKey: key,
+    style,
+    sessionsToIncrease,
     repRange: { min: template.targetMin, max: template.targetMax },
     measure,
     currentWeight,
@@ -327,7 +345,7 @@ export function getExerciseProgression(history, exercise, options = {}) {
     return base;
   }
 
-  if (sessionsAtTop >= SESSIONS_AT_TOP_TO_INCREASE) {
+  if (sessionsAtTop >= sessionsToIncrease) {
     if (options.readinessBand === "red") {
       base.action = "hold";
       base.reason = "readiness-rojo";
@@ -336,8 +354,8 @@ export function getExerciseProgression(history, exercise, options = {}) {
       return base;
     }
     base.action = "increase";
-    base.reason = "rango-completado";
-    // Al subir se vuelve al mínimo del rango y se reconstruyen repeticiones.
+    base.reason = style === "tricon" ? "sesiones-completadas" : "rango-completado";
+    // En volumen se vuelve al mínimo del rango; en TRICON las reps no cambian.
     base.suggestedReps = template.targetMin;
     base.suggestedWeight = measure === "reps"
       ? increasedWeight(currentWeight, template)
@@ -353,7 +371,12 @@ export function getExerciseProgression(history, exercise, options = {}) {
   }
 
   base.action = "hold";
-  base.reason = sessionsAtTop === 1 ? "una-sesion-al-tope" : "progresando-en-repeticiones";
+  if (style === "tricon") {
+    base.reason = sessionsAtTop > 0 ? "faltan-sesiones-al-tope" : "completa-las-nueve";
+  } else {
+    base.reason = sessionsAtTop > 0 ? "faltan-sesiones-al-tope" : "progresando-en-repeticiones";
+  }
+  base.sessionsRemaining = Math.max(0, sessionsToIncrease - sessionsAtTop);
   return base;
 }
 
@@ -688,12 +711,52 @@ export function buildDefaultRoutines() {
 }
 
 export function defaultRangeSpan(measure) {
-  return measure === "seconds" ? 15 : 3;
+  return measure === "seconds" ? 15 : 2;
+}
+
+/**
+ * Por definición, un ejercicio de repeticiones configurado a 9 es TRICON.
+ * Queda guardado como campo propio y editable: la regla decide el valor inicial,
+ * no lo ata para siempre a ese número.
+ */
+export function defaultStyle(exercise) {
+  if (exercise?.measure === "seconds") return "volumen";
+  const reps = Number(exercise?.targetMin ?? exercise?.target);
+  return reps === TRICON_REPS ? "tricon" : "volumen";
+}
+
+export function styleOf(exercise) {
+  return EXERCISE_STYLES[exercise?.style] ? exercise.style : defaultStyle(exercise);
+}
+
+/** El rango de un ejercicio de volumen: 10-12, o [objetivo-2, objetivo] si ya iba más alto. */
+export function defaultVolumeRange(target, measure) {
+  const span = defaultRangeSpan(measure);
+  const numeric = Number(target);
+  if (!Number.isFinite(numeric)) return { min: EXERCISE_STYLES.volumen.repsMin, max: EXERCISE_STYLES.volumen.repsMax };
+  // Los ejercicios por tiempo progresan hacia arriba desde donde estén: bajarle
+  // el objetivo a una plancha de 60 s para dejar hueco de rango sería absurdo.
+  if (measure === "seconds") return { min: numeric, max: numeric + span };
+  return numeric >= EXERCISE_STYLES.volumen.repsMax
+    ? { min: numeric - span, max: numeric }
+    : { min: numeric, max: numeric + span };
 }
 
 function templateExercise(id, name, setCount, target, measure = "reps") {
-  const span = defaultRangeSpan(measure);
-  const draft = { id, name, setCount, targetMin: target, targetMax: target + span, measure, defaultWeight: "" };
+  const style = defaultStyle({ measure, targetMin: target });
+  const range = style === "tricon"
+    ? { min: target, max: target }
+    : defaultVolumeRange(target, measure);
+  const draft = {
+    id,
+    name,
+    setCount,
+    style,
+    targetMin: range.min,
+    targetMax: range.max,
+    measure,
+    defaultWeight: ""
+  };
   return { ...draft, increment: defaultIncrement(draft) };
 }
 
@@ -712,14 +775,24 @@ function normalizeTemplateExercise(exercise, index = 0) {
   const legacyTarget = legacySets[0]?.reps ?? legacySets[0]?.target;
   const parsed = parseTarget(exercise.targetMin ?? exercise.target ?? legacyTarget ?? 10, exercise.measure);
   const measure = parsed.measure;
-  const span = defaultRangeSpan(measure);
-  const targetMin = clampInteger(parsed.target, 1, 999, 10);
-  const targetMax = clampInteger(
-    exercise.targetMax ?? targetMin + span,
-    targetMin,
-    999,
-    targetMin + span
-  );
+  const base = clampInteger(parsed.target, 1, 999, 10);
+  const style = styleOf({ ...exercise, measure, targetMin: base });
+
+  let targetMin;
+  let targetMax;
+  if (style === "tricon") {
+    // Sin rango: el formato TRICON son nueve repeticiones y no se negocia.
+    targetMin = base;
+    targetMax = base;
+  } else if (exercise.targetMax !== undefined && exercise.targetMin !== undefined) {
+    targetMin = base;
+    targetMax = clampInteger(exercise.targetMax, base, 999, base + defaultRangeSpan(measure));
+  } else {
+    const range = defaultVolumeRange(base, measure);
+    targetMin = clampInteger(range.min, 1, 999, base);
+    targetMax = clampInteger(range.max, targetMin, 999, base);
+  }
+
   const defaultWeight = cleanWeight(
     exercise.defaultWeight ?? legacySets.find((set) => cleanWeight(set.weight))?.weight
   );
@@ -727,6 +800,7 @@ function normalizeTemplateExercise(exercise, index = 0) {
     id: exercise.id || `exercise-${index + 1}-${createId()}`,
     name: String(exercise.name || "Ejercicio sin nombre").trim(),
     setCount: clampInteger(exercise.setCount ?? legacySets.length, 1, 12, 3),
+    style,
     targetMin,
     targetMax,
     measure,

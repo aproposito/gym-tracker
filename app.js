@@ -6,7 +6,9 @@ import {
   createId,
   createWorkoutSession,
   defaultIncrement,
-  defaultRangeSpan,
+  defaultStyle,
+  defaultVolumeRange,
+  EXERCISE_STYLES,
   discardWorkoutSession,
   emptyReadiness,
   getExerciseProgress,
@@ -100,6 +102,7 @@ const elements = {
   addExerciseForm: byId("addExerciseForm"),
   exerciseNameInput: byId("exerciseNameInput"),
   exerciseSetsInput: byId("exerciseSetsInput"),
+  exerciseStyleInput: byId("exerciseStyleInput"),
   exerciseTargetMinInput: byId("exerciseTargetMinInput"),
   exerciseTargetMaxInput: byId("exerciseTargetMaxInput"),
   exerciseMeasureInput: byId("exerciseMeasureInput"),
@@ -116,7 +119,6 @@ const elements = {
   volumeChart: byId("volumeChart"),
   volumeSummary: byId("volumeSummary"),
   shareBackupButton: byId("shareBackupButton"),
-  downloadBackupButton: byId("downloadBackupButton"),
   importInput: byId("importInput"),
   discardDialog: byId("discardDialog"),
   confirmDiscardButton: byId("confirmDiscardButton"),
@@ -191,13 +193,13 @@ function bindEvents() {
   elements.editableExerciseList.addEventListener("change", handleRoutineEditorChange);
   elements.addExerciseForm.addEventListener("submit", addExercise);
   elements.exerciseMeasureInput.addEventListener("change", updateAddExerciseFields);
+  elements.exerciseStyleInput.addEventListener("change", updateAddExerciseFields);
 
   elements.settingsButton.addEventListener("click", openSettings);
   elements.settingsDialog.addEventListener("close", saveSettings);
   elements.restSecondsInput.addEventListener("change", saveSettings);
   elements.readinessEnabledInput.addEventListener("change", toggleReadinessLayer);
   elements.shareBackupButton.addEventListener("click", shareBackup);
-  elements.downloadBackupButton.addEventListener("click", downloadBackup);
   elements.downloadCsvButton.addEventListener("click", downloadCsv);
   elements.importInput.addEventListener("change", importBackup);
 
@@ -444,13 +446,14 @@ function sessionExerciseHtml(exercise) {
   const unit = exercise.measure === "seconds" ? "seg" : "reps";
   const first = exercise.sets[0];
   const range = first ? formatRange(first.targetMin, first.targetMax, unit) : "";
+  const styleTag = exercise.progression?.style === "tricon" ? " · TRICON" : "";
   const hint = progressionHint(exercise.progression);
   return `
     <article class="exercise-card" data-session-exercise-id="${escapeAttribute(exercise.id)}">
       <div class="exercise-header">
         <div>
           <h2>${escapeHtml(exercise.name)}</h2>
-          <p>${exercise.sets.length} series · ${range}</p>
+          <p>${exercise.sets.length} series · ${range}${styleTag}</p>
         </div>
         <span class="exercise-progress">${completed}/${exercise.sets.length}</span>
       </div>
@@ -508,14 +511,23 @@ function progressionHint(progression) {
   if (progression.blockedByReadiness) {
     return { tone: "hold", text: "Rango completado, pero hoy no toca subir" };
   }
-  if (progression.reason === "una-sesion-al-tope") {
-    return { tone: "hold", text: "Una sesión más al tope del rango y subes peso" };
+  if (progression.reason === "faltan-sesiones-al-tope") {
+    const faltan = progression.sessionsRemaining;
+    return {
+      tone: "hold",
+      text: faltan === 1
+        ? "Una sesión más completa y subes peso"
+        : `${faltan} sesiones completas más y subes peso`
+    };
+  }
+  if (progression.style === "tricon") {
+    return { tone: "hold", text: `Completa las ${progression.repRange.min} en las tres series` };
   }
   if (progression.stale) {
     return { tone: "hold", text: "Tres sesiones iguales: prueba a sumar una repetición" };
   }
   if (progression.reason === "progresando-en-repeticiones") {
-    return { tone: "hold", text: "Suma repeticiones antes de tocar el peso" };
+    return { tone: "hold", text: `Sube hasta ${progression.repRange.max} antes de tocar el peso` };
   }
   return null;
 }
@@ -999,12 +1011,25 @@ function editableExerciseHtml(exercise, index, total) {
           <button type="button" data-edit-action="move-down" aria-label="Bajar ejercicio" ${index === total - 1 ? "disabled" : ""}>↓</button>
         </div>
       </div>
-      <div class="form-grid four-columns">
+      <div class="form-grid two-columns">
         <label><span>Series</span><input type="number" min="1" max="12" value="${exercise.setCount}" data-edit-field="setCount"></label>
-        <label><span>Mín.</span><input type="number" min="1" max="999" value="${exercise.targetMin}" data-edit-field="targetMin"></label>
-        <label><span>Máx.</span><input type="number" min="1" max="999" value="${exercise.targetMax}" data-edit-field="targetMax"></label>
         <label><span>Unidad</span><select data-edit-field="measure"><option value="reps" ${exercise.measure === "reps" ? "selected" : ""}>Reps</option><option value="seconds" ${exercise.measure === "seconds" ? "selected" : ""}>Seg</option></select></label>
       </div>
+      <label>
+        <span>Tipo de serie</span>
+        <select data-edit-field="style">
+          <option value="tricon" ${exercise.style === "tricon" ? "selected" : ""}>TRICON · repeticiones fijas</option>
+          <option value="volumen" ${exercise.style === "volumen" ? "selected" : ""}>Volumen · sube repeticiones y luego peso</option>
+        </select>
+      </label>
+      <div class="form-grid two-columns" data-range-fields ${exercise.style === "tricon" ? "hidden" : ""}>
+        <label><span>Mín.</span><input type="number" min="1" max="999" value="${exercise.targetMin}" data-edit-field="targetMin"></label>
+        <label><span>Máx.</span><input type="number" min="1" max="999" value="${exercise.targetMax}" data-edit-field="targetMax"></label>
+      </div>
+      <label data-fixed-field ${exercise.style === "tricon" ? "" : "hidden"}>
+        <span>Repeticiones</span>
+        <input type="number" min="1" max="999" value="${exercise.targetMin}" data-edit-field="fixedReps">
+      </label>
       <div class="form-grid two-columns">
         <label class="edit-weight" ${exercise.measure === "seconds" ? "hidden" : ""}>
           <span>Peso inicial (kg)</span>
@@ -1066,10 +1091,18 @@ function deleteRoutine() {
 }
 
 function handleRoutineEditorChange(event) {
-  if (!event.target.matches('[data-edit-field="measure"]')) return;
   const article = event.target.closest("[data-template-exercise-id]");
-  const weightLabel = article?.querySelector(".edit-weight");
-  if (weightLabel) weightLabel.hidden = event.target.value === "seconds";
+  if (!article) return;
+
+  if (event.target.matches('[data-edit-field="measure"]')) {
+    const weightLabel = article.querySelector(".edit-weight");
+    if (weightLabel) weightLabel.hidden = event.target.value === "seconds";
+  }
+  if (event.target.matches('[data-edit-field="style"]')) {
+    const tricon = event.target.value === "tricon";
+    article.querySelector("[data-range-fields]").hidden = tricon;
+    article.querySelector("[data-fixed-field]").hidden = !tricon;
+  }
 }
 
 function handleRoutineEditorClick(event) {
@@ -1098,15 +1131,21 @@ function handleRoutineEditorClick(event) {
       return;
     }
     const measure = values.measure === "seconds" ? "seconds" : "reps";
-    const targetMin = clampNumber(values.targetMin, 1, 999, 10);
+    const style = values.style === "tricon" ? "tricon" : "volumen";
     const increment = Number(values.increment);
+    // TRICON no tiene rango: mínimo y máximo son el mismo número.
+    const targetMin = style === "tricon"
+      ? clampNumber(values.fixedReps, 1, 999, EXERCISE_STYLES.tricon.reps)
+      : clampNumber(values.targetMin, 1, 999, EXERCISE_STYLES.volumen.repsMin);
     routine.exercises[exerciseIndex] = {
       ...routine.exercises[exerciseIndex],
       name: name.slice(0, 80),
       setCount: clampNumber(values.setCount, 1, 12, 3),
+      style,
       targetMin,
-      // El máximo nunca queda por debajo del mínimo: sin rango no hay progresión.
-      targetMax: clampNumber(values.targetMax, targetMin, 999, targetMin + defaultRangeSpan(measure)),
+      targetMax: style === "tricon"
+        ? targetMin
+        : clampNumber(values.targetMax, targetMin, 999, defaultVolumeRange(targetMin, measure).max),
       measure,
       increment: Number.isFinite(increment) && increment > 0
         ? increment
@@ -1129,13 +1168,19 @@ function addExercise(event) {
   const name = elements.exerciseNameInput.value.trim();
   if (!name) return;
   const measure = elements.exerciseMeasureInput.value === "seconds" ? "seconds" : "reps";
-  const targetMin = clampNumber(elements.exerciseTargetMinInput.value, 1, 999, 9);
+  const style = elements.exerciseStyleInput.value === "tricon" ? "tricon" : "volumen";
+  const targetMin = style === "tricon"
+    ? EXERCISE_STYLES.tricon.reps
+    : clampNumber(elements.exerciseTargetMinInput.value, 1, 999, EXERCISE_STYLES.volumen.repsMin);
   routine.exercises.push({
     id: createId(),
     name: name.slice(0, 80),
     setCount: clampNumber(elements.exerciseSetsInput.value, 1, 12, 3),
+    style,
     targetMin,
-    targetMax: clampNumber(elements.exerciseTargetMaxInput.value, targetMin, 999, targetMin + defaultRangeSpan(measure)),
+    targetMax: style === "tricon"
+      ? targetMin
+      : clampNumber(elements.exerciseTargetMaxInput.value, targetMin, 999, defaultVolumeRange(targetMin, measure).max),
     measure,
     increment: defaultIncrement({ name, measure }),
     defaultWeight: measure === "seconds" ? "" : cleanInputWeight(elements.exerciseWeightInput.value)
@@ -1143,7 +1188,7 @@ function addExercise(event) {
   saveState();
   elements.addExerciseForm.reset();
   elements.exerciseSetsInput.value = "3";
-  elements.exerciseTargetMinInput.value = "9";
+  elements.exerciseTargetMinInput.value = "10";
   elements.exerciseTargetMaxInput.value = "12";
   updateAddExerciseFields();
   renderRoutines();
@@ -1152,6 +1197,9 @@ function addExercise(event) {
 
 function updateAddExerciseFields() {
   elements.exerciseWeightLabel.hidden = elements.exerciseMeasureInput.value === "seconds";
+  const tricon = elements.exerciseStyleInput.value === "tricon";
+  elements.exerciseTargetMinInput.closest("label").hidden = tricon;
+  elements.exerciseTargetMaxInput.closest("label").hidden = tricon;
 }
 
 function currentEditorRoutine() {
@@ -1188,6 +1236,7 @@ function backupFile() {
   return new File([backupJson()], `gym-tracker-${todayKey()}.json`, { type: "application/json" });
 }
 
+/** Comparte donde se puede (iPhone) y descarga donde no (escritorio). */
 async function shareBackup() {
   const file = backupFile();
   try {
@@ -1202,12 +1251,6 @@ async function shareBackup() {
   } catch (error) {
     if (error.name !== "AbortError") showToast("No se pudo compartir la copia.");
   }
-}
-
-function downloadBackup() {
-  downloadFile(backupFile());
-  markBackupDone();
-  showToast("Copia descargada.");
 }
 
 /** Una fila por serie completada: legible en cualquier hoja de cálculo. */

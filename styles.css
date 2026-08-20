@@ -1355,3 +1355,18 @@ body.session-active .app-toast {
 .choice-fieldset.disabled .segmented-control button {
   cursor: default;
 }
+
+.settings-note {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.text-button.wide {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  text-align: center;
+}

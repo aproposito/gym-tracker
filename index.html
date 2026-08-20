@@ -175,14 +175,21 @@
             <span>Nombre</span>
             <input id="exerciseNameInput" type="text" autocomplete="off" required>
           </label>
-          <div class="form-grid four-columns">
+          <label>
+            <span>Tipo de serie</span>
+            <select id="exerciseStyleInput">
+              <option value="tricon">TRICON · 9 repeticiones fijas</option>
+              <option value="volumen" selected>Volumen · de 10 a 12 y luego peso</option>
+            </select>
+          </label>
+          <div class="form-grid three-columns">
             <label>
               <span>Series</span>
               <input id="exerciseSetsInput" type="number" min="1" max="12" value="3" required>
             </label>
             <label>
               <span>Reps mín.</span>
-              <input id="exerciseTargetMinInput" type="number" min="1" max="999" value="9" required>
+              <input id="exerciseTargetMinInput" type="number" min="1" max="999" value="10" required>
             </label>
             <label>
               <span>Reps máx.</span>
@@ -249,21 +256,24 @@
 
       <section class="settings-section">
         <h3>Copia de seguridad</h3>
+        <p class="settings-note">
+          Tus entrenamientos viven solo en este dispositivo. Si borras la app o
+          cambias de móvil, se van con ella.
+        </p>
         <p class="settings-hint" id="backupHint" hidden></p>
         <div class="settings-actions">
-          <button class="secondary-button" id="shareBackupButton" type="button">Compartir copia</button>
-          <button class="ghost-button" id="downloadBackupButton" type="button">Descargar JSON</button>
-          <button class="ghost-button" id="downloadCsvButton" type="button">Descargar CSV</button>
+          <button class="secondary-button" id="shareBackupButton" type="button">Guardar copia</button>
           <label class="file-button">
-            Importar JSON
+            Restaurar copia
             <input id="importInput" type="file" accept="application/json">
           </label>
         </div>
+        <button class="text-button wide" id="downloadCsvButton" type="button">Exportar CSV para hoja de cálculo</button>
       </section>
 
       <section class="settings-section about-section">
         <span>Gym Tracker</span>
-        <strong>Versión 2</strong>
+        <strong>Versión 3</strong>
       </section>
     </div>
   </dialog>
