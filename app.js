@@ -24,7 +24,7 @@ import {
   normalizeState,
   todayKey,
   updateReadinessCheckin
-} from "./domain.js";
+} from "./domain.js?v=19";
 import {
   computeDailyReadiness,
   mergeHealthDays,
@@ -1081,7 +1081,7 @@ function editableExerciseHtml(exercise, index, total) {
         </label>
         <label>
           <span>Subida (${exercise.measure === "seconds" ? "seg" : "kg"})</span>
-          <input type="number" inputmode="decimal" min="0.25" step="0.25" value="${escapeAttribute(exercise.increment)}" data-edit-field="increment">
+          <input type="number" inputmode="numeric" min="1" step="1" value="${escapeAttribute(exercise.increment)}" data-edit-field="increment">
         </label>
       </div>
       <div class="edit-exercise-actions">
@@ -1192,7 +1192,7 @@ function handleRoutineEditorClick(event) {
         : clampNumber(values.targetMax, targetMin, 999, defaultVolumeRange(targetMin, measure).max),
       measure,
       increment: Number.isFinite(increment) && increment > 0
-        ? increment
+        ? measure === "reps" ? Math.max(1, Math.floor(increment)) : increment
         : defaultIncrement({ name, measure }),
       defaultWeight: measure === "seconds" ? "" : cleanInputWeight(values.defaultWeight)
     };

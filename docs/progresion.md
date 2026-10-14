@@ -3,7 +3,7 @@
 ## Doble progresión
 
 Cada ejercicio tiene un **rango** de repeticiones, no un objetivo único: por
-ejemplo 9-12. Primero se progresa dentro del rango con el mismo peso; el peso
+ejemplo 10-12. Primero se progresa dentro del rango con el mismo peso; el peso
 solo sube cuando el rango se completa de forma sostenida.
 
 La regla, en orden:
@@ -15,6 +15,10 @@ La regla, en orden:
 
 Si te quedas por debajo del mínimo en todas las series dos sesiones seguidas, se
 propone bajar un 10 % y reconstruir desde ahí.
+
+En TRICON, incluido Leg Press de la rutina B, el objetivo son 9 repeticiones
+fijas. Se propone subir peso después de tres sesiones consecutivas completando
+las 9 repeticiones en todas las series, sin aumentar las repeticiones.
 
 ## Por qué no sube cada vez que cumples el objetivo
 
@@ -33,20 +37,21 @@ mayores.
 
 Por defecto, y editable en cada ejercicio:
 
-- Tren inferior y máquinas grandes: **2,5 kg**
-- Tren superior y movimientos pequeños: **1,25 kg**
+- Ejercicios con carga: **1 kg**
 - Ejercicios por tiempo: **5 segundos** sobre el rango
 
 Con un tope: nunca más del **5 %** de la carga actual. En un ejercicio de 20 kg,
 un incremento nominal de 2,5 kg se recorta a 1 kg.
 
-Los pesos se redondean a 0,25 kg para no proponer cargas que no se pueden montar.
+Las nuevas cargas propuestas son kilos enteros. Las subidas se redondean hacia
+abajo para respetar el límite del 5 %. Si ese límite no permite subir un kilo,
+se mantiene la carga actual.
 
 ## Qué ves en la sesión
 
 Una línea sobre las series, y nada más. Sin diálogos ni confirmaciones:
 
-- **Toca subir: 41,25 kg desde 40 kg** — el peso ya viene puesto en las series.
+- **Toca subir: 41 kg desde 40 kg** — el peso ya viene puesto en las series.
 - **Una sesión más al tope del rango y subes peso**
 - **Suma repeticiones antes de tocar el peso**
 - **Baja a 45 kg y reconstruye**

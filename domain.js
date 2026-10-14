@@ -266,10 +266,7 @@ export function discardWorkoutSession(state) {
 
 export function defaultIncrement(exercise) {
   if (exercise?.measure === "seconds") return 5;
-  const name = normalizeName(exercise?.name);
-  // Movimientos de tren inferior y máquinas grandes admiten el salto de disco;
-  // el tren superior progresa en incrementos más pequeños.
-  return /prensa|sentadilla|squat|hip thrust|femoral|gemelo|peso muerto|leg press/.test(name) ? 2.5 : 1.25;
+  return 1;
 }
 
 export function getSessionVolume(session) {
@@ -360,6 +357,9 @@ export function getExerciseProgression(history, exercise, options = {}) {
     base.suggestedWeight = measure === "reps"
       ? increasedWeight(currentWeight, template)
       : currentWeight;
+    if (measure === "reps" && Number(base.suggestedWeight) <= Number(currentWeight)) {
+      base.action = "hold";
+    }
     if (measure === "seconds") {
       base.repRange = {
         min: template.targetMin + template.increment,
@@ -385,7 +385,8 @@ function increasedWeight(currentWeight, template) {
   if (!Number.isFinite(current) || current <= 0) return currentWeight;
   // Nunca más de un 5 % de golpe, por muy grande que sea el incremento nominal.
   const step = Math.min(template.increment, current * MAX_INCREASE_RATIO);
-  return roundToLoadableWeight(current + Math.max(step, 0));
+  const next = Math.floor(current + Math.max(step, 0));
+  return next > current ? String(next) : currentWeight;
 }
 
 function sessionsForExercise(history, template) {
@@ -690,8 +691,9 @@ export function buildDefaultRoutines() {
     {
       id: "routine-b",
       name: "Rutina B",
+      legPressTriconUpdated: true,
       exercises: [
-        templateExercise("b-machine-squat", "Sentadilla máquina", 3, 9),
+        templateExercise("b-machine-squat", "Leg Press", 3, 9),
         templateExercise("b-lat-pulldown", "Jalón máquina", 3, 9),
         templateExercise("b-shoulder-press", "Press militar máquina", 3, 9),
         templateExercise("b-leg-curl", "Curl femoral máquina", 3, 10),
@@ -761,12 +763,23 @@ function templateExercise(id, name, setCount, target, measure = "reps") {
 }
 
 function normalizeRoutine(routine, index = 0) {
+  const exercises = Array.isArray(routine.exercises)
+    ? routine.exercises.map(normalizeTemplateExercise)
+    : [];
+  if (routine.id === "routine-b" && !routine.legPressTriconUpdated) {
+    exercises.forEach((exercise) => {
+      if (["leg press", "prensa de piernas"].includes(normalizeName(exercise.name))) {
+        exercise.style = "tricon";
+        exercise.targetMin = TRICON_REPS;
+        exercise.targetMax = TRICON_REPS;
+      }
+    });
+  }
   return {
     id: routine.id || `routine-${index + 1}-${createId()}`,
     name: String(routine.name || `Rutina ${index + 1}`).trim(),
-    exercises: Array.isArray(routine.exercises)
-      ? routine.exercises.map(normalizeTemplateExercise)
-      : []
+    exercises,
+    ...(routine.id === "routine-b" ? { legPressTriconUpdated: true } : {})
   };
 }
 
@@ -809,7 +822,9 @@ function normalizeTemplateExercise(exercise, index = 0) {
   const increment = Number(exercise.increment);
   return {
     ...draft,
-    increment: Number.isFinite(increment) && increment > 0 ? increment : defaultIncrement(draft)
+    increment: Number.isFinite(increment) && increment > 0
+      ? measure === "reps" ? Math.max(1, Math.floor(increment)) : increment
+      : defaultIncrement(draft)
   };
 }
 
@@ -990,12 +1005,8 @@ function toPositiveInteger(value) {
   return Number.isFinite(numeric) && numeric > 0 ? Math.round(numeric) : null;
 }
 
-/**
- * Redondea a 0,25 kg. Media unidad partiría los incrementos de 1,25 kg, que son
- * el par de discos pequeño estándar y el paso mínimo realista del tren superior.
- */
 function roundToLoadableWeight(value) {
-  return String(Math.round(value * 4) / 4);
+  return String(Math.round(value));
 }
 
 function sessionTime(session) {

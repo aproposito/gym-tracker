@@ -23,7 +23,7 @@ function template(overrides = {}) {
     targetMin: 10,
     targetMax: 12,
     measure: "reps",
-    increment: 1.25,
+    increment: 1,
     defaultWeight: "40",
     ...overrides
   };
@@ -33,6 +33,44 @@ function template(overrides = {}) {
 function tricon(overrides = {}) {
   return template({ id: "remo", name: "Remo", style: "tricon", targetMin: 9, targetMax: 9, ...overrides });
 }
+
+test("Leg Press de B se corrige a TRICON sin cambiar el historial ni la rutina C", () => {
+  const state = createDefaultState();
+  const routine = state.routines.find((item) => item.id === "routine-b");
+  delete routine.legPressTriconUpdated;
+  routine.exercises[0] = template({ id: "leg-press", name: "Leg Press", increment: 1.25 });
+  state.history = [session("2026-08-01", 12, "40", "leg-press")];
+  const originalHistory = normalizeState({ ...state, routines: [] }).history;
+  state.history = originalHistory;
+  const updated = normalizeState(state);
+  const exercise = updated.routines.find((item) => item.id === "routine-b").exercises[0];
+  assert.equal(exercise.style, "tricon");
+  assert.equal(exercise.targetMin, 9);
+  assert.equal(exercise.targetMax, 9);
+  assert.equal(exercise.increment, 1);
+  assert.deepEqual(updated.history, originalHistory);
+  assert.equal(updated.routines.find((item) => item.id === "routine-c").exercises[0].style, "volumen");
+  const history = [1, 8, 15].map((day) => session(`2026-08-${String(day).padStart(2, "0")}`, 9, "40", "leg-press"));
+  assert.equal(getExerciseProgression(history.slice(0, 2), exercise).action, "hold");
+  assert.equal(getExerciseProgression(history, exercise).suggestedWeight, "41");
+  assert.equal(getExerciseProgression(history, exercise).suggestedReps, 9);
+  exercise.style = "volumen";
+  exercise.targetMin = 10;
+  exercise.targetMax = 12;
+  assert.equal(normalizeState(updated).routines.find((item) => item.id === "routine-b").exercises[0].style, "volumen");
+});
+
+test("las nuevas cargas son enteras y no superan el límite del 5 %", () => {
+  for (const weight of ["10", "19", "20", "25", "40.25"]) {
+    const history = [session("2026-08-01", 12, weight), session("2026-08-08", 12, weight)];
+    const result = getExerciseProgression(history, template({ increment: 2.5 }));
+    assert.ok(Number(result.suggestedWeight) <= Number(weight) * 1.05);
+    if (result.action === "increase") assert.ok(Number.isInteger(Number(result.suggestedWeight)));
+    if (Number(weight) < 20) assert.equal(result.action, "hold");
+  }
+  const below = [session("2026-08-01", 7, "42.5"), session("2026-08-08", 7, "42.5")];
+  assert.equal(getExerciseProgression(below, template()).suggestedWeight, "38");
+});
 
 /** Construye una sesión con las tres series completadas a las repeticiones dadas. */
 function session(date, reps, weight = "40", exerciseId = "press") {
@@ -73,7 +111,7 @@ test("dos sesiones consecutivas al tope suben el peso y vuelven al mínimo del r
   assert.equal(progression.action, "increase");
   assert.equal(progression.reason, "rango-completado");
   assert.equal(progression.sessionsAtTop, 2);
-  assert.equal(progression.suggestedWeight, "41.25");
+  assert.equal(progression.suggestedWeight, "41");
   assert.equal(progression.suggestedReps, 10);
 });
 
@@ -147,10 +185,10 @@ test("detecta estancamiento tras tres sesiones idénticas", () => {
   assert.equal(getExerciseProgression(history.slice(0, 2), template()).stale, false);
 });
 
-test("los incrementos por defecto son mayores en tren inferior", () => {
-  assert.equal(defaultIncrement({ name: "Prensa de piernas", measure: "reps" }), 2.5);
-  assert.equal(defaultIncrement({ name: "Hip thrust", measure: "reps" }), 2.5);
-  assert.equal(defaultIncrement({ name: "Press militar máquina", measure: "reps" }), 1.25);
+test("los incrementos de carga por defecto son de un kilo", () => {
+  assert.equal(defaultIncrement({ name: "Prensa de piernas", measure: "reps" }), 1);
+  assert.equal(defaultIncrement({ name: "Hip thrust", measure: "reps" }), 1);
+  assert.equal(defaultIncrement({ name: "Press militar máquina", measure: "reps" }), 1);
   assert.equal(defaultIncrement({ name: "Plancha", measure: "seconds" }), 5);
 });
 
@@ -278,7 +316,7 @@ test("TRICON exige tres sesiones completas antes de subir peso", () => {
   const conTres = getExerciseProgression(tres, tricon());
   assert.equal(conTres.action, "increase");
   assert.equal(conTres.reason, "sesiones-completadas");
-  assert.equal(conTres.suggestedWeight, "41.25");
+  assert.equal(conTres.suggestedWeight, "41");
   assert.equal(conTres.suggestedReps, 9);
 });
 
